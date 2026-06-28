@@ -619,6 +619,7 @@
           </select>
         </div>
         <p class="broadcast-desc">作ったフレーズを選んだ長さになるまで繰り返して、1曲分にします。</p>
+        <p class="broadcast-desc">オクターブは「次に置く音符」に効きます。途中で変えれば、その場面だけ高く/低くできます。</p>
 
         <div class="wave-picker" id="wavePicker">
           <button type="button" class="wave-btn active" data-wave="sine">サイン(まる)</button>
@@ -1810,7 +1811,14 @@
 
   function addNote(freq, label){
     if(composerSequence.length >= MAX_NOTES) return;
-    composerSequence.push({ freq: freq, label: label });
+    var octaveShift = parseInt(document.getElementById('composerOctave').value, 10) || 0;
+    var mul = Math.pow(2, octaveShift);
+    var shiftedFreq = Array.isArray(freq) ? freq.map(function(f){ return f * mul; }) : freq * mul;
+    var displayLabel = label;
+    if(freq !== 0 && octaveShift !== 0){
+      displayLabel += (octaveShift > 0 ? ' (+' + octaveShift + ')' : ' (' + octaveShift + ')');
+    }
+    composerSequence.push({ freq: shiftedFreq, label: displayLabel });
     renderNoteSeq();
   }
 
@@ -1930,8 +1938,7 @@
     if(composerSequence.length === 0) return;
     var duration = parseInt(document.getElementById('composerDuration').value, 10);
     var stepTime = parseFloat(document.getElementById('composerTempo').value);
-    var octaveShift = parseInt(document.getElementById('composerOctave').value, 10);
-    playTrack('__preview__', composerSequence.map(function(n){ return n.freq; }), false, duration, currentWaveform, stepTime, octaveShift);
+    playTrack('__preview__', composerSequence.map(function(n){ return n.freq; }), false, duration, currentWaveform, stepTime);
   });
 
   document.getElementById('downloadDraftBtn').addEventListener('click', function(){
@@ -1939,9 +1946,8 @@
     var title = (composerTitleInput.value || 'zzzfm-track').trim();
     var duration = parseInt(document.getElementById('composerDuration').value, 10);
     var stepTime = parseFloat(document.getElementById('composerTempo').value);
-    var octaveShift = parseInt(document.getElementById('composerOctave').value, 10);
     var notes = composerSequence.map(function(n){ return n.freq; });
-    downloadTrack(title, notes, duration, this, currentWaveform, stepTime, octaveShift);
+    downloadTrack(title, notes, duration, this, currentWaveform, stepTime);
   });
 
   document.getElementById('submitTrackBtn').addEventListener('click', function(){
@@ -1949,11 +1955,10 @@
     var artist = (composerArtistInput.value || '名無し').trim().slice(0, 20) || '名無し';
     var duration = parseInt(document.getElementById('composerDuration').value, 10);
     var stepTime = parseFloat(document.getElementById('composerTempo').value);
-    var octaveShift = parseInt(document.getElementById('composerOctave').value, 10);
     if(!title){ composerNoteText.textContent = '曲名を入力してください。'; return; }
     if(composerSequence.length < 2){ composerNoteText.textContent = '音符を2つ以上選んでください。'; return; }
     var melody = composerSequence.map(function(n){ return n.freq; });
-    push(ref(db, 'tracks'), { title: title, artist: artist, melody: melody, durationSeconds: duration, waveform: currentWaveform, stepTime: stepTime, octaveShift: octaveShift, createdAt: Date.now() });
+    push(ref(db, 'tracks'), { title: title, artist: artist, melody: melody, durationSeconds: duration, waveform: currentWaveform, stepTime: stepTime, createdAt: Date.now() });
     composerNoteText.textContent = '投稿しました！下のライブラリに表示されます。';
     composerTitleInput.value = '';
     composerSequence = [];
