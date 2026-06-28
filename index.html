@@ -610,6 +610,13 @@
             <option value="0.2">速い</option>
             <option value="0.12">とても速い</option>
           </select>
+          <select id="composerOctave" class="live-input" style="flex:0 0 110px;">
+            <option value="-2">-2オクターブ</option>
+            <option value="-1" selected>-1オクターブ</option>
+            <option value="0">そのまま</option>
+            <option value="1">+1オクターブ</option>
+            <option value="2">+2オクターブ</option>
+          </select>
         </div>
         <p class="broadcast-desc">作ったフレーズを選んだ長さになるまで繰り返して、1曲分にします。</p>
 
@@ -1480,13 +1487,11 @@
     return guitarBufferPromise;
   }
 
-  var GUITAR_OCTAVE_SHIFT = 2; // 1オクターブ下げる（2なら1オクターブ、4なら2オクターブ）
-
   function playAcousticNoteSample(ctx, destination, freq, startTime, levelScale){
     if(!guitarBuffer) return;
     var src = ctx.createBufferSource();
     src.buffer = guitarBuffer;
-    src.playbackRate.value = (freq / GUITAR_OCTAVE_SHIFT) / GUITAR_BASE_FREQ;
+    src.playbackRate.value = freq / GUITAR_BASE_FREQ;
     var g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, startTime);
     g.gain.linearRampToValueAtTime(0.9 * (levelScale || 1), startTime + 0.003);
@@ -1494,9 +1499,10 @@
     src.start(startTime);
   }
 
-  function scheduleMelody(id, notes, waveform, stepTime){
+  function scheduleMelody(id, notes, waveform, stepTime, octaveShift){
     var ctx = ensureMelodyCtx();
     stepTime = stepTime || 0.32;
+    var octaveMul = Math.pow(2, octaveShift || 0);
 
     function doSchedule(){
       var startTime = ctx.currentTime + 0.04;
@@ -1505,7 +1511,8 @@
         var t = startTime + i * stepTime;
         var freqs = Array.isArray(step) ? step : [step];
         var levelScale = 1 / Math.sqrt(freqs.length);
-        freqs.forEach(function(freq, fi){
+        freqs.forEach(function(rawFreq, fi){
+          var freq = rawFreq * octaveMul;
           var noteTime = (waveform === 'acoustic') ? t + fi * 0.014 : t; // コードはわずかにストロークをずらす
           if(waveform === 'acoustic'){
             playAcousticNoteSample(ctx, ctx.destination, freq, noteTime, levelScale);
@@ -1522,7 +1529,7 @@
         });
       });
       melodyTimer = setTimeout(function(){
-        if(currentMelodyId === id) scheduleMelody(id, notes, waveform, stepTime);
+        if(currentMelodyId === id) scheduleMelody(id, notes, waveform, stepTime, octaveShift);
       }, notes.length * stepTime * 1000);
     }
 
@@ -1539,7 +1546,7 @@
     currentMelodyId = null;
   }
 
-  function playTrack(id, notes, countPlay, durationSeconds, waveform, stepTime){
+  function playTrack(id, notes, countPlay, durationSeconds, waveform, stepTime, octaveShift){
     if(currentMelodyId === id){
       stopMelody();
       refreshPlayingUI();
@@ -1547,7 +1554,7 @@
     }
     stopMelody();
     currentMelodyId = id;
-    scheduleMelody(id, notes, waveform, stepTime);
+    scheduleMelody(id, notes, waveform, stepTime, octaveShift);
     refreshPlayingUI();
     if(durationSeconds){
       melodyStopTimer = setTimeout(function(){
@@ -1571,11 +1578,12 @@
   }
 
   // ---------- WAVファイルとして書き出し・ダウンロード ----------
-  function renderTrackToBuffer(notes, durationSeconds, waveform, stepTime){
+  function renderTrackToBuffer(notes, durationSeconds, waveform, stepTime, octaveShift){
     var sampleRate = 44100;
     var length = Math.max(1, Math.ceil(durationSeconds * sampleRate));
     var offlineCtx = new OfflineAudioContext(1, length, sampleRate);
     stepTime = stepTime || 0.32;
+    var octaveMul = Math.pow(2, octaveShift || 0);
 
     function doRender(){
       var loopTime = notes.length * stepTime;
@@ -1587,7 +1595,8 @@
           if(noteStart >= durationSeconds) return;
           var freqs = Array.isArray(step) ? step : [step];
           var levelScale = 1 / Math.sqrt(freqs.length);
-          freqs.forEach(function(freq, fi){
+          freqs.forEach(function(rawFreq, fi){
+            var freq = rawFreq * octaveMul;
             var noteTime = (waveform === 'acoustic') ? noteStart + fi * 0.014 : noteStart;
             if(waveform === 'acoustic'){
               playAcousticNoteSample(offlineCtx, offlineCtx.destination, freq, noteTime, levelScale);
@@ -1643,11 +1652,11 @@
     return new Blob([view], { type: 'audio/wav' });
   }
 
-  function downloadTrack(title, notes, durationSeconds, btn, waveform, stepTime){
+  function downloadTrack(title, notes, durationSeconds, btn, waveform, stepTime, octaveShift){
     if(!notes || notes.length === 0) return;
     var originalLabel = btn ? btn.textContent : null;
     if(btn){ btn.textContent = '…'; btn.disabled = true; }
-    renderTrackToBuffer(notes, durationSeconds || 10, waveform, stepTime).then(function(buffer){
+    renderTrackToBuffer(notes, durationSeconds || 10, waveform, stepTime, octaveShift).then(function(buffer){
       var blob = audioBufferToWav(buffer);
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
@@ -1696,10 +1705,10 @@
 
   function wireCard(cardEl, id, t, unsubList){
     var playBtn = cardEl.querySelector('.play-btn');
-    playBtn.addEventListener('click', function(){ playTrack(id, t.melody, true, t.durationSeconds, t.waveform, t.stepTime); });
+    playBtn.addEventListener('click', function(){ playTrack(id, t.melody, true, t.durationSeconds, t.waveform, t.stepTime, t.octaveShift); });
 
     var dlBtn = cardEl.querySelector('.dl-btn');
-    dlBtn.addEventListener('click', function(){ downloadTrack(t.title, t.melody, t.durationSeconds || 10, dlBtn, t.waveform, t.stepTime); });
+    dlBtn.addEventListener('click', function(){ downloadTrack(t.title, t.melody, t.durationSeconds || 10, dlBtn, t.waveform, t.stepTime, t.octaveShift); });
 
     var heartBtn = cardEl.querySelector('.heart-btn');
     var unsub = onValue(ref(db, 'wall/likes/' + id), function(snap){
@@ -1921,7 +1930,8 @@
     if(composerSequence.length === 0) return;
     var duration = parseInt(document.getElementById('composerDuration').value, 10);
     var stepTime = parseFloat(document.getElementById('composerTempo').value);
-    playTrack('__preview__', composerSequence.map(function(n){ return n.freq; }), false, duration, currentWaveform, stepTime);
+    var octaveShift = parseInt(document.getElementById('composerOctave').value, 10);
+    playTrack('__preview__', composerSequence.map(function(n){ return n.freq; }), false, duration, currentWaveform, stepTime, octaveShift);
   });
 
   document.getElementById('downloadDraftBtn').addEventListener('click', function(){
@@ -1929,8 +1939,9 @@
     var title = (composerTitleInput.value || 'zzzfm-track').trim();
     var duration = parseInt(document.getElementById('composerDuration').value, 10);
     var stepTime = parseFloat(document.getElementById('composerTempo').value);
+    var octaveShift = parseInt(document.getElementById('composerOctave').value, 10);
     var notes = composerSequence.map(function(n){ return n.freq; });
-    downloadTrack(title, notes, duration, this, currentWaveform, stepTime);
+    downloadTrack(title, notes, duration, this, currentWaveform, stepTime, octaveShift);
   });
 
   document.getElementById('submitTrackBtn').addEventListener('click', function(){
@@ -1938,10 +1949,11 @@
     var artist = (composerArtistInput.value || '名無し').trim().slice(0, 20) || '名無し';
     var duration = parseInt(document.getElementById('composerDuration').value, 10);
     var stepTime = parseFloat(document.getElementById('composerTempo').value);
+    var octaveShift = parseInt(document.getElementById('composerOctave').value, 10);
     if(!title){ composerNoteText.textContent = '曲名を入力してください。'; return; }
     if(composerSequence.length < 2){ composerNoteText.textContent = '音符を2つ以上選んでください。'; return; }
     var melody = composerSequence.map(function(n){ return n.freq; });
-    push(ref(db, 'tracks'), { title: title, artist: artist, melody: melody, durationSeconds: duration, waveform: currentWaveform, stepTime: stepTime, createdAt: Date.now() });
+    push(ref(db, 'tracks'), { title: title, artist: artist, melody: melody, durationSeconds: duration, waveform: currentWaveform, stepTime: stepTime, octaveShift: octaveShift, createdAt: Date.now() });
     composerNoteText.textContent = '投稿しました！下のライブラリに表示されます。';
     composerTitleInput.value = '';
     composerSequence = [];
