@@ -419,6 +419,22 @@
     padding:5px 10px; border-radius:20px;
   }
 
+  .rank-panel{
+    margin-top:28px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:28px 30px;
+  }
+  .rank-title{ font-size:1.2rem; margin-top:8px; }
+  .rank-list{ display:flex; flex-direction:column; gap:8px; margin-top:18px; }
+  .rank-item{
+    display:flex; align-items:center; gap:12px; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:9px; padding:10px 14px; flex-wrap:wrap;
+  }
+  .rank-num{ font-family:var(--font-disp); font-weight:900; color:var(--amber); width:2em; flex-shrink:0; }
+  .rank-item:nth-child(1) .rank-num{ color:var(--gold); }
+  .rank-name{ font-weight:700; flex-shrink:0; }
+  .rank-track{ color:var(--muted); font-size:0.85rem; flex:1; min-width:80px; }
+  .rank-likes{ font-family:var(--font-mono); font-size:0.8rem; color:var(--pink); margin-left:auto; }
+  .badge-regular, .badge-crown{ font-size:0.85em; vertical-align:1px; cursor:default; }
+
   /* ---------- wall ---------- */
   .wall-form{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
   .wall-form input{ flex:1; min-width:140px; }
@@ -465,6 +481,7 @@
       <a href="#library">楽曲ライブラリ</a>
       <a href="#dj">DJ</a>
       <a href="#wall">リスナーの声</a>
+      <a href="#feedback">ご意見・不具合</a>
     </nav>
   </div>
 </header>
@@ -712,6 +729,20 @@
           </div>
         </div>
       </div>
+
+      <div class="rank-panel">
+        <p class="eyebrow">🏆 TONIGHT'S TOP ARTISTS</p>
+        <h3 class="rank-title">今夜の人気アーティスト</h3>
+        <p class="broadcast-desc">楽曲ライブラリの曲が集めた「いいね」を、投稿者ごとに集計したランキングです。</p>
+        <div id="artistRanking" class="rank-list"></div>
+      </div>
+
+      <div class="rank-panel">
+        <p class="eyebrow">🌟 REGULARS BOARD</p>
+        <h3 class="rank-title">常連リスナー</h3>
+        <p class="broadcast-desc">曲の投稿・もらったいいね・リスナーの声・配信した回数などを合わせて集計しています。スコアが一定を超えると🌟常連リスナーとして、名前の横にバッジがつきます。</p>
+        <div id="regularBoard" class="rank-list"></div>
+      </div>
     </div>
   </section>
 
@@ -731,6 +762,37 @@
       </form>
       <div class="wall-frame">
         <div class="wall-track" id="wallTrack"></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <section id="feedback">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">CONTACT</p>
+        <h2>管理者へのメッセージ</h2>
+        <p>新機能のアイデア、不具合の報告、その他なんでも。読んでいます。</p>
+      </div>
+      <div class="tuner-panel">
+        <form id="feedbackForm">
+          <div class="radio-control" style="border-top:none; padding-top:0;">
+            <input type="text" id="feedbackName" class="live-input" placeholder="名前(なくてもOK)" maxlength="20" style="max-width:180px;">
+            <select id="feedbackType" class="live-input" style="flex:0 0 150px;">
+              <option value="idea">💡 アイデア</option>
+              <option value="bug">🐛 不具合報告</option>
+              <option value="other">💬 その他</option>
+            </select>
+          </div>
+          <textarea id="feedbackMessage" class="live-input" style="width:100%; min-height:100px; margin-top:14px; resize:vertical;" placeholder="内容を入力してください" maxlength="500"></textarea>
+          <div class="composer-actions">
+            <button type="submit" class="btn btn-primary">送信する</button>
+          </div>
+          <p class="audio-note" id="feedbackNote"></p>
+        </form>
+        <p class="foot-hint" style="margin-top:18px;"><button class="admin-link" id="viewFeedbackBtn" type="button">管理者用：届いたメッセージを見る</button></p>
+        <div id="feedbackList" style="display:none; margin-top:14px;"></div>
       </div>
     </div>
   </section>
@@ -1033,7 +1095,7 @@
   // ====== zzZ FM — みんなの公開放送（WebRTC + Firebase Realtime Database） ======
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import {
-    getDatabase, ref, set, remove, onValue, onChildAdded, onDisconnect, push, query, limitToLast, runTransaction
+    getDatabase, ref, set, remove, onValue, onChildAdded, onDisconnect, push, query, limitToLast, runTransaction, get
   } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
   var firebaseConfig = {
@@ -1239,6 +1301,7 @@
       isBroadcasting = true;
       set(newRef, { freq: freq, name: name, startedAt: Date.now() });
       onDisconnect(newRef).remove();
+      push(ref(db, 'broadcastLog'), { name: name, startedAt: Date.now() }); // 常連認定の集計用（配信が終わっても消えない記録）
 
       startBtn.style.display = 'none';
       stopBtn.style.display = 'inline-flex';
@@ -1413,13 +1476,23 @@
   onValue(wallQuery, function(snap){
     var data = snap.val() || {};
     var ids = Object.keys(data).sort(function(a, b){ return (data[a].createdAt || 0) - (data[b].createdAt || 0); });
+
+    var counts = {};
+    ids.forEach(function(id){
+      var name = data[id] && data[id].name;
+      if(!name) return;
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    wallMessageCounts = counts;
+    if(typeof refreshLeaderboards === 'function') refreshLeaderboards();
+
     if(ids.length === 0){
       wallTrack.innerHTML = '<div class="msg-card"><div class="msg-head"><span>まだ投稿はありません</span></div><p class="msg-body">最初の声を届けてみませんか。</p></div>';
       return;
     }
     var cardsHtml = ids.map(function(id){
       var m = data[id];
-      return '<div class="msg-card"><div class="msg-head"><span>' + escapeHtml(m.name || 'リスナー') + '</span><span>' + formatTime(m.createdAt) + '</span></div><p class="msg-body">' + escapeHtml(m.text || '') + '</p></div>';
+      return '<div class="msg-card"><div class="msg-head"><span>' + escapeHtml(m.name || 'リスナー') + regularBadge(m.name) + '</span><span>' + formatTime(m.createdAt) + '</span></div><p class="msg-body">' + escapeHtml(m.text || '') + '</p></div>';
     });
     // 2連続表示でループをシームレスに見せる
     wallTrack.innerHTML = cardsHtml.join('') + cardsHtml.join('');
@@ -1706,7 +1779,7 @@
         '</div>' +
         '<div>' +
           '<p class="track-name">' + escapeHtml(t.title) + '</p>' +
-          '<p class="track-artist">' + escapeHtml(t.artist || '名無し') + '</p>' +
+          '<p class="track-artist">' + escapeHtml(t.artist || '名無し') + crownBadge(t.artist) + regularBadge(t.artist) + '</p>' +
         '</div>' +
         '<div class="track-foot">' +
           '<button class="play-btn" type="button" aria-label="試聴する">▶</button>' +
@@ -1802,8 +1875,135 @@
 
   onValue(ref(db, 'tracks'), function(snap){
     communityTracks = snap.val() || {};
-    renderLibrary();
+    refreshLeaderboards();
+  });
+
+  // ---------- 🏆 今夜の人気アーティスト & 🌟 常連リスナー ----------
+  var allLikes = {};
+  var wallMessageCounts = {};
+  var broadcastCounts = {};
+  var regularScores = {};
+  var topArtistName = null;
+  var artistRankingEl = document.getElementById('artistRanking');
+  var regularBoardEl = document.getElementById('regularBoard');
+
+  var REGULAR_THRESHOLD = 100; // この値を超えたら🌟常連リスナー（あとから調整できます）
+  var SCORE_PER_TRACK = 3;
+  var SCORE_PER_LIKE_RECEIVED = 1;
+  var SCORE_PER_WALL_MESSAGE = 1;
+  var SCORE_PER_BROADCAST = 4;
+
+  var RANK_MEDALS = ['👑', '🥈', '🥉'];
+  function rankMedal(i){ return RANK_MEDALS[i] || ('#' + (i + 1)); }
+
+  function regularBadge(name){
+    if(!name) return '';
+    var score = regularScores[name] || 0;
+    return (score >= REGULAR_THRESHOLD) ? ' <span class="badge-regular" title="常連リスナー（スコア' + score + '）">🌟</span>' : '';
+  }
+  function crownBadge(name){
+    return (name && name === topArtistName) ? ' <span class="badge-crown" title="今夜のトップアーティスト">👑</span>' : '';
+  }
+
+  function renderArtistRanking(){
+    if(!artistRankingEl) return;
+    var totals = {};
+    function addTrack(id, track){
+      var artist = (track && track.artist) || '名無し';
+      var likes = allLikes[id] || 0;
+      if(!totals[artist]){ totals[artist] = { likes: 0, bestTitle: track.title, bestLikes: -1 }; }
+      totals[artist].likes += likes;
+      if(likes > totals[artist].bestLikes){ totals[artist].bestLikes = likes; totals[artist].bestTitle = track.title; }
+    }
+    Object.keys(HOUSE_TRACKS).forEach(function(id){ addTrack(id, HOUSE_TRACKS[id]); });
+    Object.keys(communityTracks).forEach(function(id){ addTrack(id, communityTracks[id]); });
+
+    var ranked = Object.keys(totals)
+      .map(function(name){ return { name: name, likes: totals[name].likes, bestTitle: totals[name].bestTitle }; })
+      .filter(function(r){ return r.likes > 0; })
+      .sort(function(a, b){ return b.likes - a.likes; })
+      .slice(0, 5);
+
+    topArtistName = ranked.length ? ranked[0].name : null;
+
+    if(ranked.length === 0){
+      artistRankingEl.innerHTML = '<p class="lib-empty">まだ「いいね」がついた曲がありません。曲を作って、いいねを集めてみましょう。</p>';
+      return;
+    }
+    artistRankingEl.innerHTML = ranked.map(function(r, i){
+      return '<div class="rank-item">' +
+        '<span class="rank-num">' + rankMedal(i) + '</span>' +
+        '<span class="rank-name">' + escapeHtml(r.name) + regularBadge(r.name) + '</span>' +
+        '<span class="rank-track">' + escapeHtml(r.bestTitle || '') + '</span>' +
+        '<span class="rank-likes">❤ ' + r.likes + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function computeRegularScores(){
+    var scores = {};
+    function add(name, amount){
+      if(!name) return;
+      scores[name] = (scores[name] || 0) + amount;
+    }
+    Object.keys(communityTracks).forEach(function(id){
+      var t = communityTracks[id];
+      add(t.artist, SCORE_PER_TRACK);
+      add(t.artist, (allLikes[id] || 0) * SCORE_PER_LIKE_RECEIVED);
+    });
+    Object.keys(wallMessageCounts).forEach(function(name){
+      add(name, wallMessageCounts[name] * SCORE_PER_WALL_MESSAGE);
+    });
+    Object.keys(broadcastCounts).forEach(function(name){
+      add(name, broadcastCounts[name] * SCORE_PER_BROADCAST);
+    });
+    regularScores = scores;
+  }
+
+  function renderRegularBoard(){
+    if(!regularBoardEl) return;
+    var list = Object.keys(regularScores)
+      .map(function(name){ return { name: name, score: regularScores[name] }; })
+      .filter(function(r){ return r.score >= REGULAR_THRESHOLD; })
+      .sort(function(a, b){ return b.score - a.score; })
+      .slice(0, 10);
+
+    if(list.length === 0){
+      regularBoardEl.innerHTML = '<p class="lib-empty">まだ常連リスナーはいません。曲を投稿したり、リスナーの声に書き込んだりしてみましょう。</p>';
+      return;
+    }
+    regularBoardEl.innerHTML = list.map(function(r, i){
+      return '<div class="rank-item">' +
+        '<span class="rank-num">#' + (i + 1) + '</span>' +
+        '<span class="rank-name">🌟 ' + escapeHtml(r.name) + '</span>' +
+        '<span class="rank-track">スコア ' + r.score + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function refreshLeaderboards(){
+    computeRegularScores();
+    renderArtistRanking();
+    renderRegularBoard();
+    renderLibrary();   // バッジを反映するため再描画
     renderNowPlaying();
+  }
+
+  onValue(ref(db, 'wall/likes'), function(snap){
+    allLikes = snap.val() || {};
+    refreshLeaderboards();
+  });
+
+  onValue(ref(db, 'broadcastLog'), function(snap){
+    var data = snap.val() || {};
+    var counts = {};
+    Object.keys(data).forEach(function(id){
+      var name = data[id] && data[id].name;
+      if(!name) return;
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    broadcastCounts = counts;
+    refreshLeaderboards();
   });
 
   // ---------- 作曲フォーム ----------
@@ -1980,6 +2180,48 @@
     composerTitleInput.value = '';
     composerSequence = [];
     renderNoteSeq();
+  });
+
+  // ============== 管理者へのメッセージ（アイデア・不具合報告など） ==============
+  var feedbackForm = document.getElementById('feedbackForm');
+  var feedbackNote = document.getElementById('feedbackNote');
+
+  feedbackForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var name = (document.getElementById('feedbackName').value || '名無し').trim().slice(0, 20) || '名無し';
+    var type = document.getElementById('feedbackType').value;
+    var messageInput = document.getElementById('feedbackMessage');
+    var message = (messageInput.value || '').trim().slice(0, 500);
+    if(!message){ feedbackNote.textContent = '内容を入力してください。'; return; }
+    push(ref(db, 'feedback'), { name: name, type: type, message: message, createdAt: Date.now() });
+    feedbackNote.textContent = '送信しました。ありがとうございます！';
+    messageInput.value = '';
+  });
+
+  var FEEDBACK_TYPE_LABELS = { idea: '💡 アイデア', bug: '🐛 不具合報告', other: '💬 その他' };
+
+  document.getElementById('viewFeedbackBtn').addEventListener('click', function(){
+    var pass = prompt('管理用パスフレーズを入力してください');
+    if(pass === null) return;
+    if(pass !== ADMIN_PASS){ alert('パスフレーズが違います。'); return; }
+    var listEl = document.getElementById('feedbackList');
+    get(ref(db, 'feedback')).then(function(snap){
+      var data = snap.val() || {};
+      var ids = Object.keys(data).sort(function(a, b){ return (data[b].createdAt || 0) - (data[a].createdAt || 0); });
+      if(ids.length === 0){
+        listEl.innerHTML = '<p class="comment-empty">まだメッセージはありません。</p>';
+      } else {
+        listEl.innerHTML = ids.map(function(id){
+          var f = data[id];
+          var label = FEEDBACK_TYPE_LABELS[f.type] || '💬 その他';
+          var time = f.createdAt ? new Date(f.createdAt).toLocaleString('ja-JP') : '';
+          return '<div class="msg-card"><div class="msg-head"><span>' + label + ' ' + escapeHtml(f.name || '名無し') + '</span><span>' + time + '</span></div><p class="msg-body">' + escapeHtml(f.message || '') + '</p></div>';
+        }).join('');
+      }
+      listEl.style.display = 'block';
+    }).catch(function(){
+      alert('読み込みに失敗しました。');
+    });
   });
 </script>
 
