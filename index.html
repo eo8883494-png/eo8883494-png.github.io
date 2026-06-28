@@ -86,6 +86,11 @@
 
   .auth-box{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
   .user-chip{ display:flex; align-items:center; gap:8px; font-size:0.82rem; }
+  .admin-chip{
+    font-family:var(--font-mono); font-size:0.66rem; color:var(--pink); border:1px solid rgba(255,61,127,0.5);
+    background:rgba(255,61,127,0.1); padding:4px 8px; border-radius:20px; white-space:nowrap;
+  }
+  .admin-only-btn{ color:var(--pink); border-color:rgba(255,61,127,0.5); }
   .user-chip img{ width:24px; height:24px; border-radius:50%; }
   .user-chip .btn{ padding:7px 12px; font-size:0.68rem; }
   .locked-note{
@@ -116,23 +121,21 @@
 
   .nav-drawer{
     position:absolute; top:64px; right:28px; z-index:60; min-width:220px;
-    display:flex; flex-direction:column; gap:2px; padding:10px;
+    display:none; flex-direction:column; gap:2px; padding:10px;
     background:var(--panel); border:1px solid var(--line-strong); border-radius:12px;
     box-shadow:0 16px 40px rgba(0,0,0,0.5);
-    opacity:0; visibility:hidden; transform:translateY(-8px); transition:opacity .2s, transform .2s, visibility .2s;
   }
-  .nav-drawer.open{ opacity:1; visibility:visible; transform:translateY(0); }
+  .nav-drawer.open{ display:flex; }
   .nav-drawer a{
     font-family:var(--font-mono); font-size:0.78rem; color:var(--muted); text-decoration:none;
-    padding:11px 12px; border-radius:8px; transition:background .15s, color .15s;
+    padding:11px 12px; border-radius:8px; transition:background .15s, color .15s; cursor:pointer;
   }
   .nav-drawer a:hover{ background:var(--panel-2); color:var(--text); }
 
   .nav-overlay{
-    position:fixed; inset:0; z-index:55; background:rgba(0,0,0,0.4);
-    opacity:0; visibility:hidden; transition:opacity .2s, visibility .2s;
+    display:none; position:fixed; inset:0; z-index:45; background:rgba(0,0,0,0.4);
   }
-  .nav-overlay.open{ opacity:1; visibility:visible; }
+  .nav-overlay.open{ display:block; }
 
   @media (max-width:520px){ .nav-drawer{ right:16px; left:16px; min-width:0; } }
 
@@ -539,6 +542,11 @@
     background-origin:border-box; background-clip:padding-box, border-box;
   }
   .frame-dark{ padding:1px 6px; border-radius:6px; border:1px solid #000; background:#05060a; box-shadow:0 0 6px rgba(0,0,0,0.7); }
+  .frame-staff{
+    padding:1px 6px; border-radius:6px; font-weight:700; border:1px solid var(--pink);
+    background:linear-gradient(90deg, rgba(255,61,127,0.18), rgba(255,178,62,0.18));
+    box-shadow:0 0 8px rgba(255,61,127,0.6);
+  }
 
   /* ---------- wall ---------- */
   .wall-form{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
@@ -727,7 +735,7 @@
             <button class="btn btn-danger" id="stopBroadcastBtn" type="button" style="display:none;">■ 放送を終了する</button>
           </div>
           <p class="audio-note" id="broadcastStatusText"></p>
-          <p class="foot-hint"><button class="admin-link" id="adminStopBtn" type="button">管理者用：すべての配信を強制終了</button></p>
+          <p class="foot-hint" id="adminStopWrap" style="display:none;"><button class="admin-link admin-only-btn" id="adminStopBtn" type="button">🛠️ 管理者用：すべての配信を強制終了</button></p>
         </div>
 
         <audio id="remoteAudio" autoplay style="display:none;"></audio>
@@ -966,6 +974,10 @@
           <h3 class="rank-title">🎵 あなたが投稿した曲</h3>
           <div class="grid-3" id="myTracksGrid"></div>
         </div>
+        <div class="shop-category" id="myLikesSection" style="display:none;">
+          <h3 class="rank-title">❤️ いいねした曲</h3>
+          <div class="grid-3" id="myLikesGrid"></div>
+        </div>
         <div class="shop-category" id="myMessagesSection" style="display:none;">
           <h3 class="rank-title">💬 リスナーの声への投稿</h3>
           <div id="myMessagesList" style="display:flex; flex-direction:column; gap:8px; margin-top:14px;"></div>
@@ -1022,8 +1034,18 @@
           </div>
           <p class="audio-note" id="feedbackNote"></p>
         </form>
-        <p class="foot-hint" style="margin-top:18px;"><button class="admin-link" id="viewFeedbackBtn" type="button">管理者用：届いたメッセージを見る</button></p>
-        <div id="feedbackList" style="display:none; margin-top:14px;"></div>
+
+        <div id="adminPanel" style="display:none;">
+          <hr class="divider" style="margin:32px 0;">
+          <p class="snippet-eyebrow">🛠️ ADMIN PANEL</p>
+          <h3 class="rank-title">管理者パネル</h3>
+
+          <p class="foot-hint" style="margin-top:14px;"><button class="admin-link admin-only-btn" id="viewFeedbackBtn" type="button">届いたメッセージを見る</button></p>
+          <div id="feedbackList" style="margin-top:14px;"></div>
+
+          <p class="broadcast-desc" style="margin-top:28px;">🚫 現在BAN中のユーザー</p>
+          <div id="banList" style="display:flex; flex-direction:column; gap:8px; margin-top:10px;"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -1343,6 +1365,7 @@
     var id = a.getAttribute('href').slice(1);
     if(PAGE_FOR_SECTION[id]){
       e.preventDefault();
+      if(typeof closeNavDrawer === 'function') closeNavDrawer();
       gotoSection(id);
     }
   });
@@ -1365,9 +1388,6 @@
     navOverlay.classList.toggle('open', isOpen);
   });
   navOverlay.addEventListener('click', closeNavDrawer);
-  navDrawer.querySelectorAll('a').forEach(function(a){
-    a.addEventListener('click', closeNavDrawer);
-  });
 
   // ---------- moon cursor follower ----------
   var heroSection = document.getElementById('hero-section');
@@ -1415,6 +1435,31 @@
   var googleProvider = new GoogleAuthProvider();
   var currentUser = null;
 
+  // ============== 管理者判定 ==============
+  var ADMIN_EMAILS = ['eo8883494@gmail.com', 'eo8883494@zeus.eonet.ne.jp'];
+  function isAdmin(){
+    return !!(currentUser && currentUser.email && ADMIN_EMAILS.indexOf(currentUser.email) !== -1);
+  }
+
+  // ============== BAN（利用制限） ==============
+  var bans = {}; // uid -> { reason, bannedAt, bannedName }
+  onValue(ref(db, 'bans'), function(snap){
+    bans = snap.val() || {};
+    if(typeof refreshLockedNotes === 'function') refreshLockedNotes();
+    if(typeof renderAdminPanel === 'function') renderAdminPanel();
+  });
+  function isBanned(uid){
+    return !!(uid && bans[uid]);
+  }
+  function banUser(uid, name){
+    if(!uid) return;
+    if(!confirm((name || '名無し') + 'さんをBANしますか？投稿・配信・コメント・ショップが使えなくなります。')) return;
+    set(ref(db, 'bans/' + uid), { reason: 'admin', bannedAt: Date.now(), bannedName: name || '名無し' });
+  }
+  function unbanUser(uid){
+    remove(ref(db, 'bans/' + uid));
+  }
+
   // ============== ログイン（Google） ==============
   // 配信・コメント・ショップ・曲投稿・リスナーの声は、ログインしている人だけが使えます。
   // （視聴・再生・閲覧はログインなしで誰でもできます）
@@ -1431,7 +1476,8 @@
       box.innerHTML =
         '<span class="user-chip">' +
           (currentUser.photoURL ? '<img src="' + currentUser.photoURL + '" alt="">' : '') +
-          '<span>' + escapeHtml(currentUser.displayName || '名無し') + '</span>' +
+          '<span>' + escapeHtml(getPublicName()) + '</span>' +
+          (isAdmin() ? '<span class="admin-chip" title="管理者">🛠️ 管理者</span>' : '') +
           '<button class="btn" id="logoutBtn" type="button">ログアウト</button>' +
         '</span>';
       document.getElementById('logoutBtn').addEventListener('click', function(){ signOut(auth); });
@@ -1444,6 +1490,7 @@
       });
     }
     refreshLockedNotes();
+    if(typeof renderAdminPanel === 'function') renderAdminPanel();
   }
 
   // 公開する名前は profiles/{uid}/publicName。未設定ならGoogleの名前を使う。
@@ -1458,9 +1505,15 @@
 
   // 配信・コメント・ショップ・曲投稿・リスナーの声、ログインが必要な操作の前にこれを呼ぶ
   function requireLogin(){
-    if(currentUser) return getPublicName();
-    alert('この操作にはログインが必要です。右上の「ログイン」から、Googleアカウントでログインしてください。');
-    return null;
+    if(!currentUser){
+      alert('この操作にはログインが必要です。右上の「ログイン」から、Googleアカウントでログインしてください。');
+      return null;
+    }
+    if(isBanned(currentUser.uid)){
+      alert('あなたのアカウントは現在、投稿・配信などの利用が制限されています。');
+      return null;
+    }
+    return getPublicName();
   }
 
   // ログイン状態に応じて、各フォームの注意書き・入力欄の有効/無効を切り替える
@@ -1486,6 +1539,7 @@
     });
     if(typeof renderShop === 'function') renderShop();
     if(typeof renderProfile === 'function') renderProfile();
+    if(typeof renderAdminPanel === 'function') renderAdminPanel();
     if(typeof lockedLiveId !== 'undefined' && lockedLiveId && liveBroadcasts[lockedLiveId]){
       renderLiveSnippet(lockedLiveId, liveBroadcasts[lockedLiveId]);
     }
@@ -1502,7 +1556,6 @@
   ]};
 
   // 本格的な認証ではなく、簡易的な「強制停止」用の合言葉です。
-  var ADMIN_PASS = 'zzzfm-night';
   var DIAL_MIN = 76, DIAL_MAX = 108;
   var TOLERANCE = window.__zzzTolerance || 0.45;
   var FIXED_FREQS = window.__zzzFixedFreqs || [];
@@ -1608,6 +1661,11 @@
       '<p class="snippet-title">' + escapeHtml(item.name || '名無し') + 'さんが配信中</p>' +
       '<p class="snippet-desc">' + (isHost ? 'これはあなたの配信です。' : (joined ? '今、聴いています。' : 'タップして聴いてみましょう。')) + '</p>' +
       (isHost ? '' : '<button class="btn btn-primary" id="liveJoinBtn" type="button">' + (joined ? '⏹ 聴くのをやめる' : '📻 聴く') + '</button>') +
+      (isAdmin() ?
+        '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">' +
+          '<button type="button" class="btn admin-only-btn" id="adminStopOneBtn" data-id="' + id + '">🛑 この配信だけ強制終了</button>' +
+          (isHost ? '' : '<button type="button" class="btn admin-only-btn" id="adminBanBroadcasterBtn" data-uid="' + (item.uid || '') + '" data-name="' + escapeHtml(item.name || '名無し') + '">🚫 配信者をBAN</button>') +
+        '</div>' : '') +
       '<div class="live-comments">' +
         '<p class="snippet-eyebrow">💬 コメント（配信が終わると消えます）</p>' +
         '<div class="comment-list" id="commentList"></div>' +
@@ -1619,6 +1677,18 @@
           : '<p class="locked-note" style="display:flex;">🔒 コメントするにはログインが必要です。<button class="btn" type="button" onclick="document.getElementById(\'loginBtn\').click();">ログイン</button></p>') +
       '</div>';
     attachComments(id);
+    if(isAdmin()){
+      var stopOneBtn = document.getElementById('adminStopOneBtn');
+      if(stopOneBtn) stopOneBtn.addEventListener('click', function(){
+        if(!confirm(escapeHtml(item.name || '名無し') + 'さんの配信を強制終了しますか？')) return;
+        remove(ref(db, 'live/broadcasts/' + id));
+        if(listeningBroadcastId === id) leaveBroadcast();
+      });
+      var banBtn = document.getElementById('adminBanBroadcasterBtn');
+      if(banBtn) banBtn.addEventListener('click', function(){
+        banUser(banBtn.getAttribute('data-uid'), banBtn.getAttribute('data-name'));
+      });
+    }
   }
 
   function attachComments(id){
@@ -1827,11 +1897,10 @@
     for(var i = 0; i < barEls.length; i++){ barEls[i].style.transform = ''; }
   }
 
-  // ============== 管理者用：強制終了 ==============
+  // ============== 管理者用：すべての配信を強制終了 ==============
   adminStopBtn.addEventListener('click', function(){
-    var pass = prompt('管理用パスフレーズを入力してください');
-    if(pass === null) return;
-    if(pass !== ADMIN_PASS){ alert('パスフレーズが違います。'); return; }
+    if(!isAdmin()) return;
+    if(!confirm('本当に、今ある配信をすべて強制終了しますか？')) return;
     remove(broadcastsRef);
     if(isBroadcasting) stopBroadcastFn();
     if(listeningBroadcastId) leaveBroadcast();
@@ -1840,6 +1909,18 @@
 
   // ============== リスナーの声（みんなで共有するメッセージウォール） ==============
   var wallTrack = document.getElementById('wallTrack');
+  wallTrack.addEventListener('click', function(e){
+    var delBtn = e.target.closest('[data-admin-delete-msg]');
+    if(delBtn){
+      var msgId = delBtn.getAttribute('data-admin-delete-msg');
+      if(confirm('この投稿を削除しますか？元に戻せません。')) remove(ref(db, 'wall/messages/' + msgId));
+      return;
+    }
+    var banBtn = e.target.closest('[data-admin-ban-msg]');
+    if(banBtn){
+      banUser(banBtn.getAttribute('data-admin-ban-msg'), banBtn.getAttribute('data-admin-ban-name'));
+    }
+  });
   var wallForm = document.getElementById('wallForm');
   var wallNameInput = document.getElementById('wallName');
   var wallTextInput = document.getElementById('wallText');
@@ -1878,7 +1959,13 @@
     }
     var cardsHtml = ids.map(function(id){
       var m = data[id];
-      return '<div class="msg-card"><div class="msg-head"><span>' + decorateName(m.name || 'リスナー', m.uid) + regularBadge(m.uid) + '</span><span>' + formatTime(m.createdAt) + '</span></div><p class="msg-body">' + escapeHtml(m.text || '') + '</p></div>';
+      return '<div class="msg-card"><div class="msg-head"><span>' + decorateName(m.name || 'リスナー', m.uid) + regularBadge(m.uid) + '</span><span>' + formatTime(m.createdAt) + '</span></div><p class="msg-body">' + escapeHtml(m.text || '') + '</p>' +
+        (isAdmin() && m.uid ?
+          '<div style="margin-top:8px; display:flex; gap:8px;">' +
+            '<button type="button" class="admin-link admin-only-btn" data-admin-delete-msg="' + id + '">削除</button>' +
+            '<button type="button" class="admin-link admin-only-btn" data-admin-ban-msg="' + m.uid + '" data-admin-ban-name="' + escapeHtml(m.name || '名無し') + '">BANする</button>' +
+          '</div>' : '') +
+        '</div>';
     });
     // 2連続表示でループをシームレスに見せる
     wallTrack.innerHTML = cardsHtml.join('') + cardsHtml.join('');
@@ -2172,6 +2259,10 @@
           '<button class="play-btn" type="button" aria-label="試聴する">▶</button>' +
           '<span class="track-time">♪ ' + t.melody.length + '音 / ' + tempoLabel(t.stepTime) + (t.durationSeconds ? ' / ' + Math.round(t.durationSeconds) + '秒' : '') + '</span>' +
           '<button class="dl-btn" type="button" aria-label="ダウンロード">⬇</button>' +
+          (isAdmin() && t.uid ?
+            '<button class="dl-btn admin-only-btn" type="button" data-admin-delete="' + id + '" title="削除">🗑️</button>' +
+            '<button class="dl-btn admin-only-btn" type="button" data-admin-ban="' + t.uid + '" data-admin-ban-name="' + escapeHtml(t.artist || '名無し') + '" title="投稿者をBAN">🚫</button>'
+            : '') +
           '<button class="heart-btn" data-track="' + id + '">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.5-9.5-8.5C1 9 2.5 5.5 6 5c2-.3 4 .9 6 3 2-2.1 4-3.3 6-3 3.5.5 5 4 3.5 7.5C19 16.5 12 21 12 21z"/></svg>' +
             '<span class="heart-count">0</span>' +
@@ -2188,18 +2279,32 @@
     var dlBtn = cardEl.querySelector('.dl-btn');
     dlBtn.addEventListener('click', function(){ downloadTrack(t.title, t.melody, t.durationSeconds || 10, dlBtn, t.waveform, t.stepTime, t.octaveShift); });
 
+    var delBtn = cardEl.querySelector('[data-admin-delete]');
+    if(delBtn) delBtn.addEventListener('click', function(){
+      if(!confirm('「' + t.title + '」を削除しますか？元に戻せません。')) return;
+      remove(ref(db, 'tracks/' + id));
+    });
+    var banTrackBtn = cardEl.querySelector('[data-admin-ban]');
+    if(banTrackBtn) banTrackBtn.addEventListener('click', function(){
+      banUser(banTrackBtn.getAttribute('data-admin-ban'), banTrackBtn.getAttribute('data-admin-ban-name'));
+    });
+
     var heartBtn = cardEl.querySelector('.heart-btn');
     var unsub = onValue(ref(db, 'wall/likes/' + id), function(snap){
       var span = heartBtn.querySelector('.heart-count');
       if(span) span.textContent = snap.val() || 0;
     });
     unsubList.push(unsub);
-    heartBtn.classList.toggle('liked', !!likedByMe[id]);
+    var myProf = getMyProfile();
+    heartBtn.classList.toggle('liked', !!(myProf.likedTracks && myProf.likedTracks[id]));
 
     heartBtn.addEventListener('click', function(){
-      var already = !!likedByMe[id];
-      likedByMe[id] = !already;
+      if(!requireLogin()) return;
+      var uid = currentUser.uid;
+      var prof = getMyProfile();
+      var already = !!(prof.likedTracks && prof.likedTracks[id]);
       heartBtn.classList.toggle('liked', !already);
+      set(ref(db, 'profiles/' + uid + '/likedTracks/' + id), already ? null : true);
       runTransaction(ref(db, 'wall/likes/' + id), function(c){ return (c || 0) + (already ? -1 : 1); });
     });
   }
@@ -2450,20 +2555,23 @@
       { id: 'avatar_penguin', emoji: '🐧', label: 'ペンギン', cost: 15 },
       { id: 'avatar_moon', emoji: '🌙', label: 'つき', cost: 20 },
       { id: 'avatar_ghost', emoji: '👻', label: 'おばけ', cost: 25 },
-      { id: 'avatar_dragon', emoji: '🐉', label: 'ドラゴン', cost: 40 }
+      { id: 'avatar_dragon', emoji: '🐉', label: 'ドラゴン', cost: 40 },
+      { id: 'avatar_admin', emoji: '🦉', label: '管理者ふくろう', cost: 0, adminOnly: true }
     ],
     badge: [
       { id: 'badge_star', emoji: '⭐', label: 'スター', cost: 15 },
       { id: 'badge_fire', emoji: '🔥', label: 'ファイア', cost: 20 },
       { id: 'badge_gem', emoji: '💎', label: 'ジェム', cost: 30 },
       { id: 'badge_note', emoji: '🎵', label: 'おんぷ', cost: 20 },
-      { id: 'badge_rainbow', emoji: '🌈', label: 'レインボー', cost: 35 }
+      { id: 'badge_rainbow', emoji: '🌈', label: 'レインボー', cost: 35 },
+      { id: 'badge_admin', emoji: '🛡️', label: 'STAFF', cost: 0, adminOnly: true }
     ],
     frame: [
       { id: 'frame_gold', label: 'ゴールド枠', cost: 30, css: 'frame-gold' },
       { id: 'frame_neon', label: 'ネオン枠', cost: 30, css: 'frame-neon' },
       { id: 'frame_rainbow', label: '虹色枠', cost: 50, css: 'frame-rainbow' },
-      { id: 'frame_dark', label: '闇枠', cost: 40, css: 'frame-dark' }
+      { id: 'frame_dark', label: '闇枠', cost: 40, css: 'frame-dark' },
+      { id: 'frame_admin', label: '管理者枠', cost: 0, css: 'frame-staff', adminOnly: true }
     ]
   };
 
@@ -2504,11 +2612,13 @@
     refreshLeaderboards();
     renderShop();
     renderProfile();
+    if(typeof updateAuthUI === 'function') updateAuthUI();
   });
 
   function purchaseOrEquip(category, item){
     var name = requireLogin();
     if(!name) return;
+    if(item.adminOnly && !isAdmin()) return;
     var uid = currentUser.uid;
     var prof = getMyProfile();
     var owned = !!(prof.owned && prof.owned[item.id]);
@@ -2519,13 +2629,16 @@
       return;
     }
 
-    var balance = getBalance(uid);
-    if(balance < item.cost){
-      alert('ポイントが足りません。あと' + (item.cost - balance) + 'pt必要です。');
-      return;
+    var cost = isAdmin() ? 0 : item.cost;
+    if(cost > 0){
+      var balance = getBalance(uid);
+      if(balance < cost){
+        alert('ポイントが足りません。あと' + (cost - balance) + 'pt必要です。');
+        return;
+      }
+      runTransaction(ref(db, 'profiles/' + uid + '/spent'), function(c){ return (c || 0) + cost; });
     }
     set(ref(db, 'profiles/' + uid + '/owned/' + item.id), true);
-    runTransaction(ref(db, 'profiles/' + uid + '/spent'), function(c){ return (c || 0) + item.cost; });
     set(ref(db, 'profiles/' + uid + '/equipped/' + category), item.id);
   }
 
@@ -2534,7 +2647,7 @@
     var el = document.getElementById(containerId);
     if(!el) return;
     var prof = currentUser ? getMyProfile() : { owned: {}, equipped: {} };
-    var items = SHOP_ITEMS[category];
+    var items = SHOP_ITEMS[category].filter(function(item){ return !item.adminOnly || isAdmin(); });
     if(ownedOnly){
       items = items.filter(function(item){ return prof.owned && prof.owned[item.id]; });
     }
@@ -2548,12 +2661,13 @@
       var iconHtml = item.emoji
         ? '<div class="shop-item-icon">' + item.emoji + '</div>'
         : '<div class="shop-frame-preview ' + item.css + '">' + escapeHtml(item.label) + '</div>';
-      var btnLabel = equipped ? '装備中（外す）' : (owned ? '装備する' : item.cost + 'pt で交換');
+      var costLabel = (isAdmin() && !owned) ? '無料(管理者)' : item.cost + 'pt で交換';
+      var btnLabel = equipped ? '装備中（外す）' : (owned ? '装備する' : costLabel);
       var btnClass = 'shop-item-btn' + (equipped ? ' equipped' : (owned ? ' owned' : ''));
       return '<div class="shop-item" data-category="' + category + '" data-item="' + item.id + '">' +
         iconHtml +
-        '<div class="shop-item-label">' + escapeHtml(item.label) + '</div>' +
-        (ownedOnly ? '' : '<div class="shop-item-cost">' + item.cost + 'pt</div>') +
+        '<div class="shop-item-label">' + escapeHtml(item.label) + (item.adminOnly ? ' 🛠️' : '') + '</div>' +
+        (ownedOnly ? '' : '<div class="shop-item-cost">' + (isAdmin() ? '無料(管理者)' : item.cost + 'pt') + '</div>') +
         '<button type="button" class="' + btnClass + '">' + btnLabel + '</button>' +
       '</div>';
     }).join('');
@@ -2634,6 +2748,18 @@
       myTracksSection.style.display = 'none';
     }
 
+    // ---- あなたがいいねした曲 ----
+    var likedMap = prof.likedTracks || {};
+    var likedIds = Object.keys(likedMap).filter(function(id){ return likedMap[id]; });
+    var myLikesSection = document.getElementById('myLikesSection');
+    if(likedIds.length > 0){
+      if(myLikesSection) myLikesSection.style.display = '';
+      var likedEntries = likedIds.map(function(id){ return { id: id, track: getTrack(id) }; }).filter(function(e){ return e.track; });
+      renderGrid(document.getElementById('myLikesGrid'), likedEntries, '', myLikesUnsubs);
+    } else if(myLikesSection){
+      myLikesSection.style.display = 'none';
+    }
+
     // ---- あなたのリスナーの声への投稿 ----
     var myMsgIds = Object.keys(lastWallData).filter(function(id){ return lastWallData[id].uid === currentUser.uid; })
       .sort(function(a, b){ return (lastWallData[b].createdAt || 0) - (lastWallData[a].createdAt || 0); });
@@ -2650,9 +2776,10 @@
     }
 
     var myPostsEmptyNote = document.getElementById('myPostsEmptyNote');
-    if(myPostsEmptyNote) myPostsEmptyNote.style.display = (myTrackIds.length === 0 && myMsgIds.length === 0) ? '' : 'none';
+    if(myPostsEmptyNote) myPostsEmptyNote.style.display = (myTrackIds.length === 0 && likedIds.length === 0 && myMsgIds.length === 0) ? '' : 'none';
   }
   var myTracksUnsubs = [];
+  var myLikesUnsubs = [];
 
   document.getElementById('profileSaveNameBtn').addEventListener('click', function(){
     if(!requireLogin()) return;
@@ -2667,6 +2794,7 @@
       note.textContent = '保存しました！次の投稿・配信からこの名前が使われます。';
       refreshLockedNotes();
       renderProfile();
+      updateAuthUI();
     });
   });
 
@@ -2881,9 +3009,7 @@
   var FEEDBACK_TYPE_LABELS = { idea: '💡 アイデア', bug: '🐛 不具合報告', other: '💬 その他' };
 
   document.getElementById('viewFeedbackBtn').addEventListener('click', function(){
-    var pass = prompt('管理用パスフレーズを入力してください');
-    if(pass === null) return;
-    if(pass !== ADMIN_PASS){ alert('パスフレーズが違います。'); return; }
+    if(!isAdmin()) return;
     var listEl = document.getElementById('feedbackList');
     get(ref(db, 'feedback')).then(function(snap){
       var data = snap.val() || {};
@@ -2898,11 +3024,39 @@
           return '<div class="msg-card"><div class="msg-head"><span>' + label + ' ' + escapeHtml(f.name || '名無し') + '</span><span>' + time + '</span></div><p class="msg-body">' + escapeHtml(f.message || '') + '</p></div>';
         }).join('');
       }
-      listEl.style.display = 'block';
     }).catch(function(){
       alert('読み込みに失敗しました。');
     });
   });
+
+  // ---------- 🛠️ 管理者パネル（管理者アカウントでログインしている時だけ表示） ----------
+  function renderAdminPanel(){
+    var panel = document.getElementById('adminPanel');
+    if(panel) panel.style.display = isAdmin() ? '' : 'none';
+
+    var stopWrap = document.getElementById('adminStopWrap');
+    if(stopWrap) stopWrap.style.display = isAdmin() ? '' : 'none';
+
+    var banListEl = document.getElementById('banList');
+    if(!banListEl) return;
+    if(!isAdmin()){ banListEl.innerHTML = ''; return; }
+    var ids = Object.keys(bans);
+    if(ids.length === 0){
+      banListEl.innerHTML = '<p class="comment-empty">現在BAN中の人はいません。</p>';
+      return;
+    }
+    banListEl.innerHTML = ids.map(function(uid){
+      var b = bans[uid];
+      return '<div class="msg-card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">' +
+        '<span>' + escapeHtml((b && b.bannedName) || '名無し') + '</span>' +
+        '<button type="button" class="btn" data-unban="' + uid + '">解除する</button>' +
+      '</div>';
+    }).join('');
+    banListEl.querySelectorAll('[data-unban]').forEach(function(btn){
+      btn.addEventListener('click', function(){ unbanUser(btn.getAttribute('data-unban')); });
+    });
+  }
+  renderAdminPanel();
 </script>
 
 </body>
