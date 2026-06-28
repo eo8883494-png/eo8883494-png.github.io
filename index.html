@@ -388,7 +388,8 @@
   #chordModeToggle.active{ color:var(--pink); border-color:rgba(255,61,127,0.5); background:rgba(255,61,127,0.08); }
 
   .note-seq{
-    margin-top:16px; min-height:46px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    margin-top:16px; min-height:46px; max-height:220px; overflow-y:auto;
+    display:flex; align-items:flex-start; align-content:flex-start; gap:6px; flex-wrap:wrap;
     background:#070a0d; border:1px solid var(--line-strong); border-radius:9px; padding:10px 14px;
   }
   .note-seq-empty{ color:var(--muted-2); font-size:0.82rem; }
@@ -1464,6 +1465,7 @@
 
   // ---------- メロディー再生エンジン ----------
   var melodyCtx = null, melodyTimer = null, melodyStopTimer = null, currentMelodyId = null;
+  var activeNodes = []; // 今鳴っている音を覚えておき、即座に止められるようにする
 
   function ensureMelodyCtx(){
     if(!melodyCtx){ melodyCtx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -1489,7 +1491,7 @@
   }
 
   function playAcousticNoteSample(ctx, destination, freq, startTime, levelScale){
-    if(!guitarBuffer) return;
+    if(!guitarBuffer) return null;
     var src = ctx.createBufferSource();
     src.buffer = guitarBuffer;
     src.playbackRate.value = freq / GUITAR_BASE_FREQ;
@@ -1498,6 +1500,7 @@
     g.gain.linearRampToValueAtTime(0.9 * (levelScale || 1), startTime + 0.003);
     src.connect(g).connect(destination);
     src.start(startTime);
+    return { source: src, gain: g };
   }
 
   function scheduleMelody(id, notes, waveform, stepTime, octaveShift){
@@ -1506,6 +1509,7 @@
     var octaveMul = Math.pow(2, octaveShift || 0);
 
     function doSchedule(){
+      activeNodes = []; // 前のループの音はもう鳴り終わっているはずなので、参照だけ整理
       var startTime = ctx.currentTime + 0.04;
       notes.forEach(function(step, i){
         if(!step) return; // 休符はスキップ（時間だけ進む）
@@ -1516,7 +1520,8 @@
           var freq = rawFreq * octaveMul;
           var noteTime = (waveform === 'acoustic') ? t + fi * 0.014 : t; // コードはわずかにストロークをずらす
           if(waveform === 'acoustic'){
-            playAcousticNoteSample(ctx, ctx.destination, freq, noteTime, levelScale);
+            var node = playAcousticNoteSample(ctx, ctx.destination, freq, noteTime, levelScale);
+            if(node) activeNodes.push(node);
             return;
           }
           var o = ctx.createOscillator(); o.type = waveform || 'sine'; o.frequency.value = freq;
@@ -1527,6 +1532,7 @@
           o.connect(g).connect(ctx.destination);
           o.start(noteTime);
           o.stop(noteTime + stepTime);
+          activeNodes.push({ source: o, gain: g });
         });
       });
       melodyTimer = setTimeout(function(){
@@ -1545,6 +1551,17 @@
     if(melodyTimer){ clearTimeout(melodyTimer); melodyTimer = null; }
     if(melodyStopTimer){ clearTimeout(melodyStopTimer); melodyStopTimer = null; }
     currentMelodyId = null;
+    if(melodyCtx && activeNodes.length){
+      var now = melodyCtx.currentTime;
+      activeNodes.forEach(function(n){
+        try{
+          n.gain.gain.cancelScheduledValues(now);
+          n.gain.gain.setTargetAtTime(0, now, 0.012);
+          n.source.stop(now + 0.04);
+        } catch(e){ /* 既に終了済みなどは無視 */ }
+      });
+    }
+    activeNodes = [];
   }
 
   function playTrack(id, notes, countPlay, durationSeconds, waveform, stepTime, octaveShift){
@@ -1790,7 +1807,7 @@
   });
 
   // ---------- 作曲フォーム ----------
-  var MAX_NOTES = 32;
+  var MAX_NOTES = 500;
   var composerSequence = [];
   var currentWaveform = 'sine';
   var noteSeqEl = document.getElementById('noteSeq');
