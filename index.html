@@ -156,6 +156,20 @@
     box-shadow:0 0 12px rgba(61,255,160,0.15);
   }
 
+  .highlights-strip{
+    max-width:1120px; margin:0 auto; padding:0 28px 36px;
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;
+  }
+  @media (max-width:880px){ .highlights-strip{ grid-template-columns:repeat(2, 1fr); } }
+  @media (max-width:480px){ .highlights-strip{ grid-template-columns:1fr; } }
+  .highlight-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px;
+    cursor:pointer; transition:all .2s; display:flex; flex-direction:column; gap:6px;
+  }
+  .highlight-card:hover{ border-color:rgba(61,255,160,0.5); transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,0.3); }
+  .highlight-label{ font-family:var(--font-mono); font-size:0.66rem; color:var(--muted-2); letter-spacing:0.06em; }
+  .highlight-value{ font-size:0.92rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
   /* ---------- live broadcast section ---------- */
   .live-input{
     background:#070a0d; border:1px solid var(--line-strong); border-radius:7px;
@@ -607,6 +621,25 @@
     </svg>
   </section>
 
+  <div class="highlights-strip" id="highlightsStrip">
+    <div class="highlight-card" onclick="document.querySelector('.page-tab[data-page=radio]').click();" role="button" tabindex="0">
+      <span class="highlight-label">📻 今</span>
+      <span class="highlight-value" id="hlLiveValue">誰も配信していません</span>
+    </div>
+    <div class="highlight-card" onclick="document.querySelector('.page-tab[data-page=community]').click();" role="button" tabindex="0">
+      <span class="highlight-label">🏆 今夜の1位</span>
+      <span class="highlight-value" id="hlTopArtistValue">まだいません</span>
+    </div>
+    <div class="highlight-card" onclick="document.querySelector('.page-tab[data-page=music]').click();" role="button" tabindex="0">
+      <span class="highlight-label">🎵 最新の投稿</span>
+      <span class="highlight-value" id="hlNewTrackValue">まだありません</span>
+    </div>
+    <div class="highlight-card" onclick="document.querySelector('.page-tab[data-page=music]').click();" role="button" tabindex="0">
+      <span class="highlight-label">📊 これまでに</span>
+      <span class="highlight-value" id="hlStatsValue">0曲・0件の声</span>
+    </div>
+  </div>
+
   <div class="page-tab-bar-outer">
     <div class="page-tab-bar" id="pageTabBar">
       <button type="button" class="page-tab active" data-page="radio">📻 ラジオ</button>
@@ -927,7 +960,17 @@
           <h3 class="rank-title">🖼️ フレーム</h3>
           <div class="shop-grid" id="profileFrameGrid"></div>
         </div>
-        <p class="broadcast-desc" id="profileEmptyNote" style="display:none; margin-top:20px;">まだ何も持っていません。<button type="button" class="admin-link" onclick="document.querySelector(\'.mode-tab[data-tab=shop]\').click();">ショップ</button>でポイントと交換してみましょう。</p>
+        <p class="broadcast-desc" id="profileEmptyNote" style="display:none; margin-top:20px;">まだ何も持っていません。<button type="button" class="admin-link" onclick="document.querySelector('.mode-tab[data-tab=shop]').click();">ショップ</button>でポイントと交換してみましょう。</p>
+
+        <div class="shop-category" id="myTracksSection" style="display:none;">
+          <h3 class="rank-title">🎵 あなたが投稿した曲</h3>
+          <div class="grid-3" id="myTracksGrid"></div>
+        </div>
+        <div class="shop-category" id="myMessagesSection" style="display:none;">
+          <h3 class="rank-title">💬 リスナーの声への投稿</h3>
+          <div id="myMessagesList" style="display:flex; flex-direction:column; gap:8px; margin-top:14px;"></div>
+        </div>
+        <p class="broadcast-desc" id="myPostsEmptyNote" style="display:none; margin-top:20px;">まだ投稿がありません。曲を作ったり、リスナーの声に書き込んでみましょう。</p>
       </div>
 
       <div class="composer-mode" id="shopTab" style="display:none;">
@@ -1501,6 +1544,7 @@
       leaveBroadcast();
     }
     evaluateLock();
+    if(typeof renderHighlights === 'function') renderHighlights();
   });
 
   function escapeHtml(s){
@@ -1811,8 +1855,10 @@
   }
 
   var wallQuery = query(ref(db, 'wall/messages'), limitToLast(60));
+  var lastWallData = {};
   onValue(wallQuery, function(snap){
     var data = snap.val() || {};
+    lastWallData = data;
     var ids = Object.keys(data).sort(function(a, b){ return (data[a].createdAt || 0) - (data[b].createdAt || 0); });
 
     var counts = {};
@@ -1823,6 +1869,8 @@
     });
     wallMessagesByUid = counts;
     if(typeof refreshLeaderboards === 'function') refreshLeaderboards();
+    if(typeof renderProfile === 'function') renderProfile();
+    if(typeof renderHighlights === 'function') renderHighlights();
 
     if(ids.length === 0){
       wallTrack.innerHTML = '<div class="msg-card"><div class="msg-head"><span>まだ投稿はありません</span></div><p class="msg-body">最初の声を届けてみませんか。</p></div>';
@@ -2339,6 +2387,42 @@
     renderRegularBoard();
     renderLibrary();   // バッジを反映するため再描画
     renderNowPlaying();
+    if(typeof renderHighlights === 'function') renderHighlights();
+  }
+
+  // ---------- Topページのハイライト（今の配信・今夜の1位・最新の投稿・統計） ----------
+  function renderHighlights(){
+    var liveEl = document.getElementById('hlLiveValue');
+    if(liveEl){
+      var liveIds = Object.keys(liveBroadcasts || {});
+      if(liveIds.length > 0){
+        var first = liveBroadcasts[liveIds[0]];
+        liveEl.textContent = '🔴 ' + (first.name || '名無し') + 'さんが配信中' + (liveIds.length > 1 ? '（他' + (liveIds.length - 1) + '件）' : '');
+      } else {
+        liveEl.textContent = '誰も配信していません';
+      }
+    }
+
+    var topEl = document.getElementById('hlTopArtistValue');
+    if(topEl) topEl.textContent = topArtistName || 'まだいません';
+
+    var newTrackEl = document.getElementById('hlNewTrackValue');
+    if(newTrackEl){
+      var ids = Object.keys(communityTracks).sort(function(a, b){ return (communityTracks[b].createdAt || 0) - (communityTracks[a].createdAt || 0); });
+      if(ids.length > 0){
+        var t = communityTracks[ids[0]];
+        newTrackEl.textContent = t.title + '（' + (t.artist || '名無し') + '）';
+      } else {
+        newTrackEl.textContent = 'まだありません';
+      }
+    }
+
+    var statsEl = document.getElementById('hlStatsValue');
+    if(statsEl){
+      var trackCount = Object.keys(communityTracks).length;
+      var msgCount = Object.keys(lastWallData || {}).length;
+      statsEl.textContent = trackCount + '曲・' + msgCount + '件の声';
+    }
   }
 
   onValue(ref(db, 'wall/likes'), function(snap){
@@ -2537,7 +2621,38 @@
     });
     var emptyNote2 = document.getElementById('profileEmptyNote');
     if(emptyNote2) emptyNote2.style.display = hasAny ? 'none' : '';
+
+    // ---- あなたが投稿した曲 ----
+    var myTrackIds = Object.keys(communityTracks).filter(function(id){ return communityTracks[id].uid === currentUser.uid; })
+      .sort(function(a, b){ return (communityTracks[b].createdAt || 0) - (communityTracks[a].createdAt || 0); });
+    var myTracksSection = document.getElementById('myTracksSection');
+    if(myTrackIds.length > 0){
+      if(myTracksSection) myTracksSection.style.display = '';
+      var entries = myTrackIds.map(function(id){ return { id: id, track: communityTracks[id] }; });
+      renderGrid(document.getElementById('myTracksGrid'), entries, '', myTracksUnsubs);
+    } else if(myTracksSection){
+      myTracksSection.style.display = 'none';
+    }
+
+    // ---- あなたのリスナーの声への投稿 ----
+    var myMsgIds = Object.keys(lastWallData).filter(function(id){ return lastWallData[id].uid === currentUser.uid; })
+      .sort(function(a, b){ return (lastWallData[b].createdAt || 0) - (lastWallData[a].createdAt || 0); });
+    var myMessagesSection = document.getElementById('myMessagesSection');
+    var myMessagesList = document.getElementById('myMessagesList');
+    if(myMsgIds.length > 0 && myMessagesList){
+      if(myMessagesSection) myMessagesSection.style.display = '';
+      myMessagesList.innerHTML = myMsgIds.map(function(id){
+        var m = lastWallData[id];
+        return '<div class="msg-card"><div class="msg-head"><span>' + formatTime(m.createdAt) + '</span></div><p class="msg-body">' + escapeHtml(m.text || '') + '</p></div>';
+      }).join('');
+    } else if(myMessagesSection){
+      myMessagesSection.style.display = 'none';
+    }
+
+    var myPostsEmptyNote = document.getElementById('myPostsEmptyNote');
+    if(myPostsEmptyNote) myPostsEmptyNote.style.display = (myTrackIds.length === 0 && myMsgIds.length === 0) ? '' : 'none';
   }
+  var myTracksUnsubs = [];
 
   document.getElementById('profileSaveNameBtn').addEventListener('click', function(){
     if(!requireLogin()) return;
@@ -2546,8 +2661,12 @@
     var newName = (input.value || '').trim().slice(0, 20);
     if(!newName){ note.textContent = '名前を入力してください。'; return; }
     set(ref(db, 'profiles/' + currentUser.uid + '/publicName'), newName).then(function(){
+      // サーバーからの再取得を待たず、その場でローカルにも反映しておく（表示の即時反映のため）
+      profiles[currentUser.uid] = profiles[currentUser.uid] || { owned: {}, equipped: {}, spent: 0 };
+      profiles[currentUser.uid].publicName = newName;
       note.textContent = '保存しました！次の投稿・配信からこの名前が使われます。';
       refreshLockedNotes();
+      renderProfile();
     });
   });
 
