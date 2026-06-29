@@ -705,6 +705,16 @@
     background:linear-gradient(90deg, rgba(255,61,127,0.18), rgba(255,178,62,0.18));
     box-shadow:0 0 8px rgba(255,61,127,0.6);
   }
+  .frame-mint{
+    padding:1px 6px; border-radius:6px; border:1px solid #5ee8c5;
+    background:rgba(94,232,197,0.12); box-shadow:0 0 8px rgba(94,232,197,0.5);
+  }
+  .frame-cottoncandy{
+    padding:1px 6px; border-radius:6px; border:1px solid transparent;
+    background-image: linear-gradient(var(--panel), var(--panel)), linear-gradient(90deg, #f4a0c0, #b59ce0, #f4a0c0);
+    background-origin:border-box; background-clip:padding-box, border-box;
+    box-shadow:0 0 6px rgba(244,160,192,0.4);
+  }
 
   /* ---------- プロフィールヘッダー(ショップで交換できる背景・カスタム画像) ---------- */
   .profile-header-banner{
@@ -3286,6 +3296,10 @@
       { id: 'badge_gem', emoji: '💎', label: 'ジェム', cost: 30 },
       { id: 'badge_note', emoji: '🎵', label: 'おんぷ', cost: 20 },
       { id: 'badge_rainbow', emoji: '🌈', label: 'レインボー', cost: 35 },
+      { id: 'badge_img_headphones', img: 'badge-headphones.png', label: 'ヘッドホン(イラスト)', cost: 35 },
+      { id: 'badge_img_moon', img: 'badge-moon.png', label: 'ムーン(イラスト)', cost: 35 },
+      { id: 'badge_img_sparkle', img: 'badge-sparkle.png', label: 'きらめき(イラスト)', cost: 35 },
+      { id: 'badge_img_note', img: 'badge-note.png', label: 'おんぷ(イラスト)', cost: 35 },
       { id: 'badge_admin', emoji: '🛡️', label: 'STAFF', cost: 0, adminOnly: true }
     ],
     frame: [
@@ -3293,6 +3307,8 @@
       { id: 'frame_neon', label: 'ネオン枠', cost: 30, css: 'frame-neon' },
       { id: 'frame_rainbow', label: '虹色枠', cost: 50, css: 'frame-rainbow' },
       { id: 'frame_dark', label: '闇枠', cost: 40, css: 'frame-dark' },
+      { id: 'frame_mint', label: 'ミントドリーム枠', cost: 35, css: 'frame-mint' },
+      { id: 'frame_cottoncandy', label: 'コットンキャンディ枠', cost: 35, css: 'frame-cottoncandy' },
       { id: 'frame_admin', label: '管理者枠', cost: 0, css: 'frame-staff', adminOnly: true }
     ],
     header: [
@@ -3369,7 +3385,7 @@
       html = '';
       if(avatarItem) html += avatarHtml(avatarItem) + ' ';
       html += frameItem ? ('<span class="' + frameItem.css + '">' + escapeHtml(name) + '</span>') : escapeHtml(name);
-      if(badgeItem) html += ' ' + badgeItem.emoji;
+      if(badgeItem) html += ' ' + avatarHtml(badgeItem);
     }
     if(uid){
       return '<span class="clickable-name" data-view-uid="' + uid + '" title="プロフィールを見る">' + html + '</span>';
