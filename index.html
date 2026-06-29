@@ -8,7 +8,26 @@
 <meta property="og:title" content="zzZ FM（zzzfm） | 眠れない夜の周波数">
 <meta property="og:description" content="眠れない夜にだけつながる、みんなで作る架空のラジオ局。周波数を探して番組や生配信を聴いたり、曲を作って投稿したりできます。">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://eo8883494-png.github.io/">
+<meta property="og:image" content="https://eo8883494-png.github.io/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="zzZ FM（zzzfm） | 眠れない夜の周波数">
+<meta name="twitter:description" content="眠れない夜にだけつながる、みんなで作る架空のラジオ局。">
+<meta name="twitter:image" content="https://eo8883494-png.github.io/og-image.png">
+
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0c10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="zzZ FM">
+
 <meta name="google-site-verification" content="V4jspz9oO5PY6PMsblKm024b5-nBFlTbOpt47RoiNY0" />
+
+<!-- ▼ Googleアナリティクスの測定ID(G-で始まるもの)が発行されたら、ここに貼り付けます ▼ -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&family=Zen+Kaku+Gothic+New:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -391,6 +410,8 @@
   .comment-form input{ flex:1; min-width:90px; }
   .comment-name-input{ flex:0 0 90px; }
   .comment-form .btn{ margin-top:0; padding:10px 16px; }
+  .track-comments{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line-strong); }
+  .comment-count-badge{ font-size:0.65em; margin-left:1px; }
 
   .confetti-host{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:5; }
   .confetti-piece{ position:absolute; top:0; will-change:transform,opacity; border-radius:1px; }
@@ -898,7 +919,16 @@
         <p class="audio-note" id="composerNote"></p>
       </div>
 
-      <div class="grid-3" id="trackLibraryGrid" style="margin-top:24px;"></div>
+      <div class="radio-control" style="border-top:none; padding-top:0; margin-top:24px;">
+        <input type="text" id="librarySearchInput" class="live-input" placeholder="🔍 曲名・アーティスト名で検索">
+        <select id="librarySortSelect" class="live-input" style="flex:0 0 160px;">
+          <option value="newest">新しい順</option>
+          <option value="oldest">古い順</option>
+          <option value="liked">いいねが多い順</option>
+          <option value="title">曲名順(あ→ん)</option>
+        </select>
+      </div>
+      <div class="grid-3" id="trackLibraryGrid" style="margin-top:18px;"></div>
     </div>
   </section>
   </div>
@@ -1103,6 +1133,11 @@
         <p class="foot-note">どこにも存在しない、深夜だけの放送局です。ここに書かれている番組・楽曲・人物は全てフィクションであり、実在のものとは一切関係ありません。</p>
         <p class="foot-hint">ヒント：眠れない夜は、ダイヤルの端から端まで、ゆっくり動かしてみるといいことがあるかも。</p>
         <p class="foot-hint" style="margin-top:10px;"><a href="#privacy" style="color:var(--muted); text-decoration:underline;">プライバシーポリシー</a></p>
+        <div class="share-buttons" style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;">
+          <a class="btn" href="https://twitter.com/intent/tweet?text=%E7%9C%A0%E3%82%8C%E3%81%AA%E3%81%84%E5%A4%9C%E3%81%AB%E3%81%A0%E3%81%91%E3%81%A4%E3%81%AA%E3%81%8C%E3%82%8B%E3%83%A9%E3%82%B8%E3%82%AA%E5%B1%80%E3%80%8CzzZ%20FM%E3%80%8D&url=https%3A%2F%2Feo8883494-png.github.io%2F" target="_blank" rel="noopener">🐦 Xでシェア</a>
+          <a class="btn" href="https://social-plugins.line.me/lineit/share?url=https%3A%2F%2Feo8883494-png.github.io%2F&text=%E7%9C%A0%E3%82%8C%E3%81%AA%E3%81%84%E5%A4%9C%E3%81%AB%E3%81%A0%E3%81%91%E3%81%A4%E3%81%AA%E3%81%8C%E3%82%8B%E3%83%A9%E3%82%B8%E3%82%AA%E5%B1%80%E3%80%8CzzZ%20FM%E3%80%8D" target="_blank" rel="noopener">💬 LINEでシェア</a>
+          <button type="button" class="btn" id="copyLinkBtn">📋 リンクをコピー(Instagram等に貼る用)</button>
+        </div>
       </div>
       <p class="track-time">© NOWHERE, EVERY MIDNIGHT</p>
     </div>
@@ -1696,6 +1731,29 @@
       return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
     });
   }
+
+  var SITE_URL = 'https://eo8883494-png.github.io/';
+  function shareContent(text){
+    if(navigator.share){
+      navigator.share({ title: 'zzZ FM', text: text, url: SITE_URL }).catch(function(){});
+    } else {
+      window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(SITE_URL), '_blank', 'noopener');
+    }
+  }
+
+  var copyLinkBtn = document.getElementById('copyLinkBtn');
+  if(copyLinkBtn) copyLinkBtn.addEventListener('click', function(){
+    var done = function(){
+      var original = copyLinkBtn.textContent;
+      copyLinkBtn.textContent = '✅ コピーしました！';
+      setTimeout(function(){ copyLinkBtn.textContent = original; }, 2000);
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(SITE_URL).then(done).catch(function(){ prompt('このURLをコピーしてください:', SITE_URL); });
+    } else {
+      prompt('このURLをコピーしてください:', SITE_URL);
+    }
+  });
 
   function nearestLive(freq, excludeId){
     var bestId = null, best = null, bestDist = Infinity;
@@ -2350,6 +2408,8 @@
           '<button class="play-btn" type="button" aria-label="試聴する">▶</button>' +
           '<span class="track-time">♪ ' + t.melody.length + '音 / ' + tempoLabel(t.stepTime) + (t.durationSeconds ? ' / ' + Math.round(t.durationSeconds) + '秒' : '') + '</span>' +
           '<button class="dl-btn" type="button" aria-label="ダウンロード">⬇</button>' +
+          '<button class="dl-btn" type="button" aria-label="シェア" data-share-title="' + escapeHtml(t.title) + '" data-share-artist="' + escapeHtml(t.artist || '名無し') + '">🔗</button>' +
+          (t.uid ? '<button class="dl-btn" type="button" aria-label="コメント" data-toggle-comments>💬<span class="comment-count-badge" id="commentCount-' + id + '"></span></button>' : '') +
           (isAdmin() && t.uid ?
             '<button class="dl-btn admin-only-btn" type="button" data-admin-delete="' + id + '" title="削除">🗑️</button>' +
             '<button class="dl-btn admin-only-btn" type="button" data-admin-ban="' + t.uid + '" data-admin-ban-name="' + escapeHtml(t.artist || '名無し') + '" title="投稿者をBAN">🚫</button>'
@@ -2359,6 +2419,14 @@
             '<span class="heart-count">0</span>' +
           '</button>' +
         '</div>' +
+        (t.uid ?
+          '<div class="track-comments" id="trackComments-' + id + '" style="display:none;">' +
+            '<div class="comment-list" id="trackCommentList-' + id + '"></div>' +
+            (currentUser
+              ? '<form class="comment-form" data-comment-form="' + id + '"><input type="text" class="live-input" placeholder="コメントを送る" maxlength="80"><button class="btn btn-primary" type="submit">送信</button></form>'
+              : '<p class="locked-note" style="display:flex;">🔒 コメントするにはログインが必要です。<button class="btn" type="button" onclick="document.getElementById(\'loginBtn\').click();">ログイン</button></p>') +
+          '</div>'
+          : '') +
       '</article>'
     );
   }
@@ -2370,6 +2438,11 @@
     var dlBtn = cardEl.querySelector('.dl-btn');
     dlBtn.addEventListener('click', function(){ downloadTrack(t.title, t.melody, t.durationSeconds || 10, dlBtn, t.waveform, t.stepTime, t.octaveShift); });
 
+    var shareBtn = cardEl.querySelector('[data-share-title]');
+    if(shareBtn) shareBtn.addEventListener('click', function(){
+      shareContent(shareBtn.getAttribute('data-share-title') + '（' + shareBtn.getAttribute('data-share-artist') + ' / zzZ FM）');
+    });
+
     var delBtn = cardEl.querySelector('[data-admin-delete]');
     if(delBtn) delBtn.addEventListener('click', function(){
       if(!confirm('「' + t.title + '」を削除しますか？元に戻せません。')) return;
@@ -2379,6 +2452,42 @@
     if(banTrackBtn) banTrackBtn.addEventListener('click', function(){
       banUser(banTrackBtn.getAttribute('data-admin-ban'), banTrackBtn.getAttribute('data-admin-ban-name'));
     });
+
+    if(t.uid){
+      var toggleBtn = cardEl.querySelector('[data-toggle-comments]');
+      var commentsBlock = cardEl.querySelector('.track-comments');
+      if(toggleBtn && commentsBlock){
+        toggleBtn.addEventListener('click', function(){
+          commentsBlock.style.display = (commentsBlock.style.display === 'none') ? 'block' : 'none';
+        });
+      }
+      var commentListEl = cardEl.querySelector('.comment-list');
+      var unsubC = onValue(ref(db, 'tracks/' + id + '/comments'), function(snap){
+        var data = snap.val() || {};
+        var cids = Object.keys(data).sort(function(a, b){ return (data[a].createdAt || 0) - (data[b].createdAt || 0); });
+        var countEl = document.getElementById('commentCount-' + id);
+        if(countEl) countEl.textContent = cids.length ? (' ' + cids.length) : '';
+        if(commentListEl){
+          commentListEl.innerHTML = cids.length ? cids.map(function(cid){
+            var c = data[cid];
+            return '<p class="comment-item"><span class="comment-name">' + decorateName(c.name || '名無し', c.uid) + '</span>' + escapeHtml(c.text || '') + '</p>';
+          }).join('') : '<p class="comment-empty">まだコメントはありません。</p>';
+        }
+      });
+      unsubList.push(unsubC);
+
+      var commentFormEl = cardEl.querySelector('[data-comment-form]');
+      if(commentFormEl) commentFormEl.addEventListener('submit', function(e){
+        e.preventDefault();
+        var name = requireLogin();
+        if(!name) return;
+        var input = commentFormEl.querySelector('input');
+        var text = (input.value || '').trim().slice(0, 80);
+        if(!text) return;
+        push(ref(db, 'tracks/' + id + '/comments'), { name: name, uid: currentUser.uid, text: text, createdAt: Date.now() });
+        input.value = '';
+      });
+    }
 
     var heartBtn = cardEl.querySelector('.heart-btn');
     var unsub = onValue(ref(db, 'wall/likes/' + id), function(snap){
@@ -2447,14 +2556,35 @@
 
   // ---------- 楽曲ライブラリ（みんなが投稿した全曲） ----------
   var trackLibraryGrid = document.getElementById('trackLibraryGrid');
+  var librarySearchInput = document.getElementById('librarySearchInput');
+  var librarySortSelect = document.getElementById('librarySortSelect');
 
   function renderLibrary(){
-    var ids = Object.keys(communityTracks).sort(function(a, b){
-      return (communityTracks[b].createdAt || 0) - (communityTracks[a].createdAt || 0);
+    var query = (librarySearchInput && librarySearchInput.value || '').trim().toLowerCase();
+    var sortBy = librarySortSelect ? librarySortSelect.value : 'newest';
+
+    var ids = Object.keys(communityTracks).filter(function(id){
+      if(!query) return true;
+      var t = communityTracks[id];
+      var haystack = ((t.title || '') + ' ' + (t.artist || '')).toLowerCase();
+      return haystack.indexOf(query) !== -1;
     });
+
+    ids.sort(function(a, b){
+      var ta = communityTracks[a], tb = communityTracks[b];
+      if(sortBy === 'oldest') return (ta.createdAt || 0) - (tb.createdAt || 0);
+      if(sortBy === 'liked') return (allLikes[b] || 0) - (allLikes[a] || 0);
+      if(sortBy === 'title') return (ta.title || '').localeCompare((tb.title || ''), 'ja');
+      return (tb.createdAt || 0) - (ta.createdAt || 0); // newest（既定）
+    });
+
     var entries = ids.map(function(id){ return { id: id, track: communityTracks[id] }; });
-    renderGrid(trackLibraryGrid, entries, 'まだ投稿はありません。下のフォームから最初の1曲を作ってみませんか。', libraryUnsubs);
+    var emptyMsg = query ? '「' + escapeHtml(query) + '」に一致する曲は見つかりませんでした。' : 'まだ投稿はありません。下のフォームから最初の1曲を作ってみませんか。';
+    renderGrid(trackLibraryGrid, entries, emptyMsg, libraryUnsubs);
   }
+
+  if(librarySearchInput) librarySearchInput.addEventListener('input', renderLibrary);
+  if(librarySortSelect) librarySortSelect.addEventListener('change', renderLibrary);
 
   onValue(ref(db, 'tracks'), function(snap){
     communityTracks = snap.val() || {};
