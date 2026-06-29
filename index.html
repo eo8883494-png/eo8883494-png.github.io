@@ -691,6 +691,19 @@
     box-shadow:0 0 8px rgba(255,61,127,0.6);
   }
 
+  /* ---------- プロフィールヘッダー(ショップで交換できる背景) ---------- */
+  .profile-header-banner{
+    border-radius:14px 14px 0 0; height:90px; margin:-30px -28px 22px; position:relative; overflow:hidden;
+  }
+  @media (max-width:640px){ .profile-header-banner{ margin:-30px -20px 22px; } }
+  .pheader-aurora{ background:linear-gradient(120deg, #0a3d2e, #1a5c4a, #3dffa0, #1a5c4a, #0a3d2e); }
+  .pheader-sunset{ background:linear-gradient(120deg, #2b0f2e, #7a2348, #ffb23e, #ff3d7f, #2b0f2e); }
+  .pheader-galaxy{ background:linear-gradient(120deg, #050414, #1a1040, #4a2d7a, #ff3d7f, #050414); }
+  .pheader-fog{ background:linear-gradient(120deg, #14181f, #2a3340, #4a5568, #2a3340, #14181f); }
+  .pheader-sakura{ background:linear-gradient(120deg, #1c0f16, #4a2535, #ff9bb8, #ff3d7f, #1c0f16); }
+  .pheader-admin{ background:linear-gradient(120deg, #1a0508, #4a0e18, #ff3d7f, #ffb23e, #1a0508); }
+  .pheader-shop-preview{ height:46px; border-radius:8px; }
+
   /* ---------- wall ---------- */
   .wall-form{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
   .wall-form input{ flex:1; min-width:140px; }
@@ -1127,6 +1140,7 @@
             <button class="btn btn-primary" type="button" onclick="document.getElementById('loginBtn').click();">🔑 Googleでログイン</button>
           </div>
           <div id="profileContent" style="display:none;">
+            <div class="profile-header-banner" id="profileHeaderBanner"></div>
             <div class="profile-header-row">
               <div class="profile-avatar-display" id="profileAvatarDisplay">👤</div>
               <div class="profile-header-info">
@@ -1140,6 +1154,12 @@
                 <span class="profile-points-num" id="profilePoints">0</span>
                 <span class="profile-points-label">POINTS</span>
               </div>
+            </div>
+
+            <p class="snippet-eyebrow" style="margin-top:20px;">📝 自己紹介(任意・60文字まで)</p>
+            <div class="radio-control" style="border-top:none; padding-top:0;">
+              <input type="text" id="profileBioInput" class="live-input" placeholder="ひとこと自己紹介を書いてみましょう" maxlength="60">
+              <button type="button" class="btn btn-primary" id="profileSaveBioBtn">保存する</button>
             </div>
 
             <div class="referral-card">
@@ -1169,6 +1189,10 @@
         <div class="shop-category" id="profileFrameSection" style="display:none;">
           <h3 class="rank-title">🖼️ フレーム</h3>
           <div class="shop-grid" id="profileFrameGrid"></div>
+        </div>
+        <div class="shop-category" id="profileHeaderSection" style="display:none;">
+          <h3 class="rank-title">🎨 プロフィールヘッダー</h3>
+          <div class="shop-grid" id="profileHeaderGrid"></div>
         </div>
         <p class="broadcast-desc" id="profileEmptyNote" style="display:none; margin-top:20px;">まだ何も持っていません。<button type="button" class="admin-link" onclick="document.querySelector('.mode-tab[data-tab=shop]').click();">ショップ</button>でポイントと交換してみましょう。</p>
 
@@ -1209,6 +1233,10 @@
         <div class="shop-category">
           <h3 class="rank-title">🖼️ フレーム</h3>
           <div class="shop-grid" id="shopFrameGrid"></div>
+        </div>
+        <div class="shop-category">
+          <h3 class="rank-title">🎨 プロフィールヘッダー</h3>
+          <div class="shop-grid" id="shopHeaderGrid"></div>
         </div>
       </div>
     </div>
@@ -3167,6 +3195,14 @@
       { id: 'frame_rainbow', label: '虹色枠', cost: 50, css: 'frame-rainbow' },
       { id: 'frame_dark', label: '闇枠', cost: 40, css: 'frame-dark' },
       { id: 'frame_admin', label: '管理者枠', cost: 0, css: 'frame-staff', adminOnly: true }
+    ],
+    header: [
+      { id: 'header_aurora', label: 'オーロラ', cost: 25, css: 'pheader-aurora' },
+      { id: 'header_sunset', label: '夕焼け', cost: 25, css: 'pheader-sunset' },
+      { id: 'header_galaxy', label: '銀河', cost: 35, css: 'pheader-galaxy' },
+      { id: 'header_fog', label: '夜霧', cost: 20, css: 'pheader-fog' },
+      { id: 'header_sakura', label: '夜桜', cost: 35, css: 'pheader-sakura' },
+      { id: 'header_admin', label: '管理者専用', cost: 0, css: 'pheader-admin', adminOnly: true }
     ]
   };
 
@@ -3268,9 +3304,14 @@
     el.innerHTML = items.map(function(item){
       var owned = !!(prof.owned && prof.owned[item.id]);
       var equipped = prof.equipped && prof.equipped[category] === item.id;
-      var iconHtml = item.emoji
-        ? '<div class="shop-item-icon">' + item.emoji + '</div>'
-        : '<div class="shop-frame-preview ' + item.css + '">' + escapeHtml(item.label) + '</div>';
+      var iconHtml;
+      if(item.emoji){
+        iconHtml = '<div class="shop-item-icon">' + item.emoji + '</div>';
+      } else if(category === 'header'){
+        iconHtml = '<div class="profile-header-banner pheader-shop-preview ' + item.css + '" style="margin:0; border-radius:8px; height:46px;"></div>';
+      } else {
+        iconHtml = '<div class="shop-frame-preview ' + item.css + '">' + escapeHtml(item.label) + '</div>';
+      }
       var costLabel = (isAdmin() && !owned) ? '無料(管理者)' : item.cost + 'pt で交換';
       var btnLabel = equipped ? '装備中（外す）' : (owned ? '装備する' : costLabel);
       var btnClass = 'shop-item-btn' + (equipped ? ' equipped' : (owned ? ' owned' : ''));
@@ -3293,6 +3334,7 @@
     renderShopGrid('shopAvatarGrid', 'avatar', false);
     renderShopGrid('shopBadgeGrid', 'badge', false);
     renderShopGrid('shopFrameGrid', 'frame', false);
+    renderShopGrid('shopHeaderGrid', 'header', false);
     var balanceText = document.getElementById('shopBalanceText');
     if(!balanceText) return;
     if(currentUser){
@@ -3313,7 +3355,7 @@
     var publicView = document.getElementById('publicProfileView');
     if(viewingUid){
       if(selfPanel) selfPanel.style.display = 'none';
-      ['profileAvatarSection', 'profileBadgeSection', 'profileFrameSection', 'myTracksSection', 'myLikesSection', 'myMessagesSection', 'followingSection'].forEach(function(id){
+      ['profileAvatarSection', 'profileBadgeSection', 'profileFrameSection', 'profileHeaderSection', 'myTracksSection', 'myLikesSection', 'myMessagesSection', 'followingSection'].forEach(function(id){
         var el = document.getElementById(id); if(el) el.style.display = 'none';
       });
       var emptyNoteA = document.getElementById('profileEmptyNote'); if(emptyNoteA) emptyNoteA.style.display = 'none';
@@ -3328,7 +3370,7 @@
     if(!currentUser){
       if(panelLocked) panelLocked.style.display = 'block';
       content.style.display = 'none';
-      ['profileAvatarSection', 'profileBadgeSection', 'profileFrameSection'].forEach(function(id){
+      ['profileAvatarSection', 'profileBadgeSection', 'profileFrameSection', 'profileHeaderSection'].forEach(function(id){
         var el = document.getElementById(id); if(el) el.style.display = 'none';
       });
       var emptyNote = document.getElementById('profileEmptyNote');
@@ -3354,9 +3396,17 @@
       var myAvatarItem = findItem('avatar', (prof.equipped || {}).avatar);
       avatarDisplayEl.textContent = myAvatarItem ? myAvatarItem.emoji : '👤';
     }
+    var headerBannerEl = document.getElementById('profileHeaderBanner');
+    if(headerBannerEl){
+      var myHeaderItem = findItem('header', (prof.equipped || {}).header);
+      headerBannerEl.className = 'profile-header-banner' + (myHeaderItem ? ' ' + myHeaderItem.css : '');
+      headerBannerEl.style.display = myHeaderItem ? '' : 'none';
+    }
+    var bioInput = document.getElementById('profileBioInput');
+    if(bioInput && document.activeElement !== bioInput){ bioInput.value = prof.bio || ''; }
 
     var hasAny = false;
-    [['avatar', 'profileAvatarSection', 'profileAvatarGrid'], ['badge', 'profileBadgeSection', 'profileBadgeGrid'], ['frame', 'profileFrameSection', 'profileFrameGrid']].forEach(function(row){
+    [['avatar', 'profileAvatarSection', 'profileAvatarGrid'], ['badge', 'profileBadgeSection', 'profileBadgeGrid'], ['frame', 'profileFrameSection', 'profileFrameGrid'], ['header', 'profileHeaderSection', 'profileHeaderGrid']].forEach(function(row){
       var category = row[0], sectionId = row[1], gridId = row[2];
       var ownedCount = SHOP_ITEMS[category].filter(function(item){ return prof.owned && prof.owned[item.id]; }).length;
       var sectionEl = document.getElementById(sectionId);
@@ -3456,6 +3506,8 @@
     var amFollowing = isFollowing(uid);
     var eq = prof.equipped || {};
     var avatarItem = findItem('avatar', eq.avatar);
+    var headerItem = findItem('header', eq.header);
+    var bio = prof.bio || '';
 
     var trackIds = Object.keys(communityTracks).filter(function(id){ return communityTracks[id].uid === uid; });
     var totalLikes = trackIds.reduce(function(sum, id){ return sum + (allLikes[id] || 0); }, 0);
@@ -3468,11 +3520,13 @@
     var bestTrack = bestTrackId ? communityTracks[bestTrackId] : null;
 
     panel.innerHTML =
+      (headerItem ? '<div class="profile-header-banner ' + headerItem.css + '"></div>' : '') +
       '<button type="button" class="admin-link" id="backToMyProfileBtn">← 戻る</button>' +
       '<div style="margin-top:14px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">' +
         (avatarItem ? '<div style="font-size:2.8rem; line-height:1;">' + avatarItem.emoji + '</div>' : '') +
         '<div>' +
           '<h3 class="rank-title" style="margin:0;">' + decorateName(dispName, uid) + (score >= REGULAR_THRESHOLD ? ' <span class="badge-regular" title="常連リスナー">🌟</span>' : '') + '</h3>' +
+          (bio ? '<p class="broadcast-desc" style="margin-top:6px;">' + escapeHtml(bio) + '</p>' : '') +
           '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">' +
             (currentUser && currentUser.uid !== uid ?
               '<button type="button" class="btn btn-primary" id="publicFollowBtn">' + (amFollowing ? '✅ フォロー中' : '➕ フォローする') + '</button>'
@@ -3517,6 +3571,17 @@
       refreshLockedNotes();
       renderProfile();
       updateAuthUI();
+    });
+  });
+
+  document.getElementById('profileSaveBioBtn').addEventListener('click', function(){
+    if(!requireLogin()) return;
+    var bioInput = document.getElementById('profileBioInput');
+    var newBio = (bioInput.value || '').trim().slice(0, 60);
+    set(ref(db, 'profiles/' + currentUser.uid + '/bio'), newBio).then(function(){
+      profiles[currentUser.uid] = profiles[currentUser.uid] || { owned: {}, equipped: {}, spent: 0 };
+      profiles[currentUser.uid].bio = newBio;
+      showToast('自己紹介を保存しました。', 'success');
     });
   });
 
