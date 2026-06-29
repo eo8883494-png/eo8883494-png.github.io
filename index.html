@@ -158,9 +158,9 @@
   .profile-display-name{ margin:0; font-size:1.2rem; }
   .profile-bio-view{ color:var(--muted); font-size:0.86rem; margin-top:8px; line-height:1.6; }
   .profile-stats-row{ display:flex; gap:22px; margin-top:16px; flex-wrap:wrap; }
-  .profile-stat{ background:none; border:none; padding:0; text-align:left; cursor:pointer; }
+  .profile-stat{ background:none; border:none; padding:0; text-align:left; cursor:pointer; color:var(--text); font-family:inherit; }
   .profile-stat:hover .profile-stat-num{ color:var(--green); }
-  .profile-stat-num{ display:block; font-family:var(--font-disp); font-weight:900; font-size:1.15rem; transition:color .15s; }
+  .profile-stat-num{ display:block; font-family:var(--font-disp); font-weight:900; font-size:1.15rem; color:var(--text); transition:color .15s; }
   .profile-stat-label{ font-family:var(--font-mono); font-size:0.64rem; color:var(--muted); letter-spacing:0.04em; }
   .profile-points-badge{
     text-align:center; background:rgba(61,255,160,0.08); border:1px solid rgba(61,255,160,0.35);
@@ -711,13 +711,50 @@
     border-radius:14px 14px 0 0; height:110px; position:relative; overflow:hidden;
     background-size:cover; background-position:center;
   }
-  .pheader-aurora{ background:linear-gradient(120deg, #0a3d2e, #1a5c4a, #3dffa0, #1a5c4a, #0a3d2e); }
-  .pheader-sunset{ background:linear-gradient(120deg, #2b0f2e, #7a2348, #ffb23e, #ff3d7f, #2b0f2e); }
-  .pheader-galaxy{ background:linear-gradient(120deg, #050414, #1a1040, #4a2d7a, #ff3d7f, #050414); }
-  .pheader-fog{ background:linear-gradient(120deg, #14181f, #2a3340, #4a5568, #2a3340, #14181f); }
-  .pheader-sakura{ background:linear-gradient(120deg, #1c0f16, #4a2535, #ff9bb8, #ff3d7f, #1c0f16); }
-  .pheader-admin{ background:linear-gradient(120deg, #1a0508, #4a0e18, #ff3d7f, #ffb23e, #1a0508); }
+  @keyframes pheader-flow{ 0%{background-position:0% 50%;} 50%{background-position:100% 50%;} 100%{background-position:0% 50%;} }
+  .pheader-aurora, .pheader-sunset, .pheader-galaxy, .pheader-fog, .pheader-sakura, .pheader-admin{
+    background-size:220% 220%; animation:pheader-flow 9s ease-in-out infinite;
+  }
+  .pheader-aurora{ background-image:linear-gradient(120deg, #0a3d2e, #1a5c4a, #3dffa0, #1a5c4a, #0a3d2e); }
+  .pheader-sunset{ background-image:linear-gradient(120deg, #2b0f2e, #7a2348, #ffb23e, #ff3d7f, #2b0f2e); }
+  .pheader-galaxy{ background-image:linear-gradient(120deg, #050414, #1a1040, #4a2d7a, #ff3d7f, #050414); }
+  .pheader-fog{ background-image:linear-gradient(120deg, #14181f, #2a3340, #4a5568, #2a3340, #14181f); }
+  .pheader-sakura{ background-image:linear-gradient(120deg, #1c0f16, #4a2535, #ff9bb8, #ff3d7f, #1c0f16); }
+  .pheader-admin{ background-image:linear-gradient(120deg, #1a0508, #4a0e18, #ff3d7f, #ffb23e, #1a0508); }
   .pheader-shop-preview{ height:46px; border-radius:8px; }
+
+  /* ---------- 星がきらめくヘッダー（流れ星） ---------- */
+  @keyframes pheader-stars-drift{ from{ background-position:0 0; } to{ background-position:-300px 150px; } }
+  .pheader-stardust{
+    background-image:
+      radial-gradient(2px 2px at 20px 30px, #fff, transparent),
+      radial-gradient(2px 2px at 90px 80px, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 150px 20px, #ffd97a, transparent),
+      radial-gradient(2px 2px at 200px 90px, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 260px 40px, #3dffa0, transparent),
+      linear-gradient(120deg, #050414, #1a1040, #2a1a55, #050414);
+    background-size:300px 150px, 300px 150px, 300px 150px, 300px 150px, 300px 150px, 220% 220%;
+    animation:pheader-stars-drift 14s linear infinite, pheader-flow 12s ease-in-out infinite;
+  }
+  @keyframes pheader-comet-fly{ 0%{ transform:translate(-20%, -40%) rotate(20deg); opacity:0; } 8%{ opacity:1; } 25%{ transform:translate(140%, 60%) rotate(20deg); opacity:0; } 100%{ opacity:0; } }
+  .pheader-comet::after{
+    content:''; position:absolute; top:20%; left:0; width:46px; height:2px;
+    background:linear-gradient(90deg, transparent, #fff, #fff);
+    box-shadow:0 0 8px 1px #fff; animation:pheader-comet-fly 4.5s ease-in infinite;
+  }
+
+  /* ---------- 動くアバター ---------- */
+  .avatar-emoji{ display:inline-block; }
+  @keyframes avatar-spin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+  @keyframes avatar-pulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.22); } }
+  @keyframes avatar-twinkle{ 0%,100%{ opacity:1; transform:scale(1) rotate(0deg); } 50%{ opacity:0.5; transform:scale(0.82) rotate(10deg); } }
+  @keyframes avatar-bounce{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-5px); } }
+  @keyframes avatar-wobble{ 0%,100%{ transform:rotate(-8deg); } 50%{ transform:rotate(8deg); } }
+  .avatar-anim-spin{ animation:avatar-spin 3s linear infinite; }
+  .avatar-anim-pulse{ animation:avatar-pulse 1.5s ease-in-out infinite; }
+  .avatar-anim-twinkle{ animation:avatar-twinkle 1.3s ease-in-out infinite; }
+  .avatar-anim-bounce{ animation:avatar-bounce 1.1s ease-in-out infinite; }
+  .avatar-anim-wobble{ animation:avatar-wobble 0.9s ease-in-out infinite; }
 
   /* ---------- wall ---------- */
   .wall-form{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
@@ -3222,7 +3259,13 @@
       { id: 'avatar_moon', emoji: '🌙', label: 'つき', cost: 20 },
       { id: 'avatar_ghost', emoji: '👻', label: 'おばけ', cost: 25 },
       { id: 'avatar_dragon', emoji: '🐉', label: 'ドラゴン', cost: 40 },
-      { id: 'avatar_admin', emoji: '🦉', label: '管理者ふくろう', cost: 0, adminOnly: true }
+      { id: 'avatar_sparkle', emoji: '✨', label: 'きらめき(動く)', cost: 40, anim: 'twinkle' },
+      { id: 'avatar_comet', emoji: '☄️', label: 'コメット(動く)', cost: 45, anim: 'spin' },
+      { id: 'avatar_heartbeat', emoji: '💗', label: 'ハートビート(動く)', cost: 40, anim: 'pulse' },
+      { id: 'avatar_owl_plain', emoji: '🦉', label: 'ふくろう', cost: 20 },
+      { id: 'avatar_ghost_anim', emoji: '👻', label: 'ふわふわおばけ(動く)', cost: 45, anim: 'wobble' },
+      { id: 'avatar_owl_anim', emoji: '🦉', label: 'よふくろう(ふわふわ・管理者専用)', cost: 0, adminOnly: true, anim: 'bounce' },
+      { id: 'avatar_admin', emoji: '🦉', label: '管理者ふくろう', cost: 0, adminOnly: true, anim: 'twinkle' }
     ],
     badge: [
       { id: 'badge_star', emoji: '⭐', label: 'スター', cost: 15 },
@@ -3240,11 +3283,13 @@
       { id: 'frame_admin', label: '管理者枠', cost: 0, css: 'frame-staff', adminOnly: true }
     ],
     header: [
-      { id: 'header_aurora', label: 'オーロラ', cost: 25, css: 'pheader-aurora' },
-      { id: 'header_sunset', label: '夕焼け', cost: 25, css: 'pheader-sunset' },
-      { id: 'header_galaxy', label: '銀河', cost: 35, css: 'pheader-galaxy' },
-      { id: 'header_fog', label: '夜霧', cost: 20, css: 'pheader-fog' },
-      { id: 'header_sakura', label: '夜桜', cost: 35, css: 'pheader-sakura' },
+      { id: 'header_aurora', label: 'オーロラ(動く)', cost: 25, css: 'pheader-aurora' },
+      { id: 'header_sunset', label: '夕焼け(動く)', cost: 25, css: 'pheader-sunset' },
+      { id: 'header_galaxy', label: '銀河(動く)', cost: 35, css: 'pheader-galaxy' },
+      { id: 'header_fog', label: '夜霧(動く)', cost: 20, css: 'pheader-fog' },
+      { id: 'header_sakura', label: '夜桜(動く)', cost: 35, css: 'pheader-sakura' },
+      { id: 'header_stardust', label: '流れ星(動く)', cost: 50, css: 'pheader-stardust' },
+      { id: 'header_comet', label: '彗星が飛ぶ夜空(動く)', cost: 55, css: 'pheader-galaxy pheader-comet' },
       { id: 'header_admin', label: '管理者専用', cost: 0, css: 'pheader-admin', adminOnly: true }
     ]
   };
@@ -3257,6 +3302,24 @@
     for(var i = 0; i < list.length; i++){ if(list[i].id === itemId) return list[i]; }
     return null;
   }
+
+  // アバターの絵文字を、動くアイテムならアニメーション付きで表示するためのHTML
+  function avatarHtml(item){
+    if(!item) return '';
+    return '<span class="avatar-emoji' + (item.anim ? ' avatar-anim-' + item.anim : '') + '">' + item.emoji + '</span>';
+  }
+
+  // ショップのミニプレビュー用：ヘッダーごとの色見本（クラスのCSS解決に頼らず、確実に表示するため）
+  var HEADER_PREVIEW_BG = {
+    'pheader-aurora': 'linear-gradient(120deg, #0a3d2e, #1a5c4a, #3dffa0, #1a5c4a, #0a3d2e)',
+    'pheader-sunset': 'linear-gradient(120deg, #2b0f2e, #7a2348, #ffb23e, #ff3d7f, #2b0f2e)',
+    'pheader-galaxy': 'linear-gradient(120deg, #050414, #1a1040, #4a2d7a, #ff3d7f, #050414)',
+    'pheader-galaxy pheader-comet': 'linear-gradient(120deg, #050414, #1a1040, #4a2d7a, #ff3d7f, #050414)',
+    'pheader-fog': 'linear-gradient(120deg, #14181f, #2a3340, #4a5568, #2a3340, #14181f)',
+    'pheader-sakura': 'linear-gradient(120deg, #1c0f16, #4a2535, #ff9bb8, #ff3d7f, #1c0f16)',
+    'pheader-stardust': 'radial-gradient(2px 2px at 20% 30%, #fff, transparent), radial-gradient(2px 2px at 70% 70%, #fff, transparent), radial-gradient(1.5px 1.5px at 50% 20%, #ffd97a, transparent), linear-gradient(120deg, #050414, #1a1040, #2a1a55)',
+    'pheader-admin': 'linear-gradient(120deg, #1a0508, #4a0e18, #ff3d7f, #ffb23e, #1a0508)'
+  };
 
   function getBalance(uid){
     if(!uid) return 0;
@@ -3278,7 +3341,7 @@
       var badgeItem = findItem('badge', eq.badge);
       var frameItem = findItem('frame', eq.frame);
       html = '';
-      if(avatarItem) html += avatarItem.emoji + ' ';
+      if(avatarItem) html += avatarHtml(avatarItem) + ' ';
       html += frameItem ? ('<span class="' + frameItem.css + '">' + escapeHtml(name) + '</span>') : escapeHtml(name);
       if(badgeItem) html += ' ' + badgeItem.emoji;
     }
@@ -3349,9 +3412,10 @@
       var equipped = prof.equipped && prof.equipped[category] === item.id;
       var iconHtml;
       if(item.emoji){
-        iconHtml = '<div class="shop-item-icon">' + item.emoji + '</div>';
+        iconHtml = '<div class="shop-item-icon">' + avatarHtml(item) + '</div>';
       } else if(category === 'header'){
-        iconHtml = '<div class="profile-header-banner pheader-shop-preview ' + item.css + '" style="margin:0; border-radius:8px; height:46px;"></div>';
+        var previewBg = HEADER_PREVIEW_BG[item.css] || 'linear-gradient(120deg, #222, #444)';
+        iconHtml = '<div class="' + item.css + '" style="width:100%; height:46px; border-radius:8px; background-image:' + previewBg + '; background-size:cover; background-position:center;"></div>';
       } else {
         iconHtml = '<div class="shop-frame-preview ' + item.css + '">' + escapeHtml(item.label) + '</div>';
       }
@@ -3438,7 +3502,7 @@
     var avatarDisplayEl = document.getElementById('profileAvatarDisplay');
     if(avatarDisplayEl){
       var myAvatarItem = findItem('avatar', (prof.equipped || {}).avatar);
-      avatarDisplayEl.textContent = myAvatarItem ? myAvatarItem.emoji : '👤';
+      avatarDisplayEl.innerHTML = myAvatarItem ? avatarHtml(myAvatarItem) : '👤';
     }
     var headerBannerEl = document.getElementById('profileHeaderBanner');
     if(headerBannerEl){
@@ -3614,7 +3678,7 @@
     panel.innerHTML =
       '<div class="profile-banner-wrap">' +
         '<div class="profile-header-banner' + (!prof.headerImageUrl && headerItem ? ' ' + headerItem.css : '') + '"' + (prof.headerImageUrl ? ' style="background-image:url(' + JSON.stringify(prof.headerImageUrl) + ');"' : '') + '></div>' +
-        '<div class="profile-avatar-display">' + (avatarItem ? avatarItem.emoji : '👤') + '</div>' +
+        '<div class="profile-avatar-display">' + (avatarItem ? avatarHtml(avatarItem) : '👤') + '</div>' +
       '</div>' +
       '<div class="profile-name-block">' +
         '<button type="button" class="admin-link" id="backToMyProfileBtn">← 戻る</button>' +
