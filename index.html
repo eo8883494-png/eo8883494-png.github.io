@@ -185,10 +185,11 @@
 
   .highlights-strip{
     max-width:1120px; margin:0 auto; padding:0 28px 36px;
-    display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;
+    display:grid; grid-template-columns:repeat(5, 1fr); gap:12px;
   }
-  @media (max-width:880px){ .highlights-strip{ grid-template-columns:repeat(2, 1fr); } }
-  @media (max-width:480px){ .highlights-strip{ grid-template-columns:1fr; } }
+  @media (max-width:980px){ .highlights-strip{ grid-template-columns:repeat(3, 1fr); } }
+  @media (max-width:640px){ .highlights-strip{ grid-template-columns:repeat(2, 1fr); } }
+  @media (max-width:380px){ .highlights-strip{ grid-template-columns:1fr; } }
   .highlight-card{
     background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px;
     cursor:pointer; transition:all .2s; display:flex; flex-direction:column; gap:6px;
@@ -221,6 +222,53 @@
     background:var(--panel-2); color:var(--muted); font-size:0.8rem; line-height:1;
   }
   .ad-anchor-close:hover{ border-color:var(--green); color:var(--text); }
+
+  /* ---------- toast / confirm modal ---------- */
+  .toast-container{
+    position:fixed; bottom:90px; left:50%; transform:translateX(-50%); z-index:90;
+    display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none;
+    width:100%; padding:0 16px;
+  }
+  .toast{
+    background:var(--panel); border:1px solid var(--line-strong); border-radius:9px;
+    padding:12px 18px; font-size:0.85rem; box-shadow:0 10px 30px rgba(0,0,0,0.4);
+    opacity:0; transform:translateY(10px); transition:opacity .25s, transform .25s;
+    max-width:420px; text-align:center;
+  }
+  .toast.show{ opacity:1; transform:translateY(0); }
+  .toast.toast-error{ border-color:rgba(255,61,127,0.5); color:var(--pink); }
+  .toast.toast-success{ border-color:rgba(61,255,160,0.5); color:var(--green); }
+
+  .confirm-overlay{
+    position:fixed; inset:0; z-index:95; background:rgba(0,0,0,0.55);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .confirm-box{
+    background:var(--panel); border:1px solid var(--line-strong); border-radius:14px; padding:26px;
+    max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  }
+  .confirm-box p{ font-size:0.92rem; line-height:1.7; }
+  .confirm-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+
+  .mood-tag-picker{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .mood-tag-btn{
+    font-family:var(--font-mono); font-size:0.74rem; padding:8px 14px; border-radius:20px;
+    border:1px solid var(--line-strong); background:var(--panel-2); color:var(--muted); transition:all .2s;
+  }
+  .mood-tag-btn:hover{ border-color:var(--green); color:var(--text); }
+  .mood-tag-btn.active{
+    color:var(--green); border-color:rgba(61,255,160,0.5); background:rgba(61,255,160,0.1);
+  }
+  .track-tags{ display:flex; gap:5px; flex-wrap:wrap; margin-top:6px; }
+  .track-tag-chip{
+    font-family:var(--font-mono); font-size:0.62rem; color:var(--muted); border:1px solid var(--line-strong);
+    border-radius:10px; padding:2px 8px;
+  }
+  .daily-theme-banner{
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; padding:14px 18px;
+    background:rgba(255,178,62,0.08); border:1px solid rgba(255,178,62,0.3); border-radius:10px;
+  }
+  .daily-theme-text{ font-weight:700; font-size:1rem; color:var(--amber); }
   body.has-ad-anchor footer{ padding-bottom:74px; }
 
   /* ---------- live broadcast section ---------- */
@@ -686,6 +734,10 @@
   </section>
 
   <div class="highlights-strip" id="highlightsStrip">
+    <div class="highlight-card" onclick="document.querySelector('.page-tab[data-page=music]').click();" role="button" tabindex="0">
+      <span class="highlight-label">🎯 今日のテーマ</span>
+      <span class="highlight-value" id="hlThemeValue">―</span>
+    </div>
     <div class="highlight-card" onclick="document.querySelector('.page-tab[data-page=radio]').click();" role="button" tabindex="0">
       <span class="highlight-label">📻 今</span>
       <span class="highlight-value" id="hlLiveValue">誰も配信していません</span>
@@ -833,6 +885,10 @@
       </div>
 
       <div class="tuner-panel composer">
+        <div class="daily-theme-banner" id="dailyThemeBanner">
+          <span class="snippet-eyebrow">🎯 今日のテーマ</span>
+          <span class="daily-theme-text" id="dailyThemeText"></span>
+        </div>
         <div class="radio-control" style="border-top:none; padding-top:0;">
           <input type="text" id="composerTitle" class="live-input" placeholder="曲名" maxlength="30">
           <input type="text" id="composerArtist" class="live-input" placeholder="アーティスト名(ラジオネーム)" maxlength="20">
@@ -908,6 +964,10 @@
         </div>
 
         <div class="note-seq" id="noteSeq"><span class="note-seq-empty">音符をタップして、メロディーを作ってみましょう（2〜32音）</span></div>
+
+        <p class="snippet-eyebrow" style="margin-top:18px;">🏷️ ムード（最大3つまで・任意）</p>
+        <div class="mood-tag-picker" id="moodTagPicker"></div>
+
         <div class="composer-actions">
           <button type="button" class="btn" id="undoNoteBtn">⌫ ひとつ戻す</button>
           <button type="button" class="btn" id="resetNoteBtn">リセット</button>
@@ -928,6 +988,7 @@
           <option value="title">曲名順(あ→ん)</option>
         </select>
       </div>
+      <div class="mood-tag-picker" id="libraryTagFilter" style="margin-top:10px;"></div>
       <div class="grid-3" id="trackLibraryGrid" style="margin-top:18px;"></div>
     </div>
   </section>
@@ -1026,6 +1087,13 @@
             </div>
             <p class="audio-note" id="profileNameNote">これが、配信・コメント・曲投稿・リスナーの声で使われる名前になります。</p>
             <p class="broadcast-desc" style="margin-top:14px;">今のポイント：<strong id="profilePoints">0</strong> pt</p>
+
+            <p class="snippet-eyebrow" style="margin-top:24px;">🎁 友達を紹介してポイントGET</p>
+            <p class="broadcast-desc">このリンクから新しい人がログインすると、お互いに+15ptもらえます。</p>
+            <div class="radio-control" style="border-top:none; padding-top:0;">
+              <input type="text" id="referralLinkInput" class="live-input" readonly>
+              <button type="button" class="btn btn-primary" id="copyReferralBtn">📋 コピー</button>
+            </div>
           </div>
         </div>
 
@@ -1174,6 +1242,18 @@
     </div>
   </div>
 </section>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="confirm-overlay" id="confirmOverlay" style="display:none;">
+  <div class="confirm-box">
+    <p id="confirmMessage"></p>
+    <div class="confirm-actions">
+      <button type="button" class="btn" id="confirmCancelBtn">キャンセル</button>
+      <button type="button" class="btn btn-primary" id="confirmOkBtn">OK</button>
+    </div>
+  </div>
+</div>
 
 <div class="ad-anchor" id="adAnchor">
   <div class="ad-anchor-inner">📢 広告スペース（準備中・画面下に追従するタイプ）</div>
@@ -1485,6 +1565,43 @@
     }
   });
 
+  // ---------- トースト通知・確認モーダル（alert/confirmの代わり） ----------
+  function showToast(message, type){
+    var container = document.getElementById('toastContainer');
+    if(!container){ return; }
+    var el = document.createElement('div');
+    el.className = 'toast' + (type ? ' toast-' + type : '');
+    el.textContent = message;
+    container.appendChild(el);
+    requestAnimationFrame(function(){ el.classList.add('show'); });
+    setTimeout(function(){
+      el.classList.remove('show');
+      setTimeout(function(){ el.remove(); }, 300);
+    }, 3400);
+  }
+
+  function showConfirm(message){
+    return new Promise(function(resolve){
+      var overlay = document.getElementById('confirmOverlay');
+      var msgEl = document.getElementById('confirmMessage');
+      var okBtn = document.getElementById('confirmOkBtn');
+      var cancelBtn = document.getElementById('confirmCancelBtn');
+      if(!overlay || !msgEl || !okBtn || !cancelBtn){ resolve(window.confirm(message)); return; }
+      msgEl.textContent = message;
+      overlay.style.display = 'flex';
+      function cleanup(result){
+        overlay.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        resolve(result);
+      }
+      function onOk(){ cleanup(true); }
+      function onCancel(){ cleanup(false); }
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+    });
+  }
+
   // ---------- 画面下のアンカー広告(準備中プレースホルダー) ----------
   var adAnchor = document.getElementById('adAnchor');
   var adAnchorClose = document.getElementById('adAnchorClose');
@@ -1579,11 +1696,15 @@
   }
   function banUser(uid, name){
     if(!uid) return;
-    if(!confirm((name || '名無し') + 'さんをBANしますか？投稿・配信・コメント・ショップが使えなくなります。')) return;
-    set(ref(db, 'bans/' + uid), { reason: 'admin', bannedAt: Date.now(), bannedName: name || '名無し' });
+    showConfirm((name || '名無し') + 'さんをBANしますか？投稿・配信・コメント・ショップが使えなくなります。').then(function(ok){
+      if(!ok) return;
+      set(ref(db, 'bans/' + uid), { reason: 'admin', bannedAt: Date.now(), bannedName: name || '名無し' });
+      showToast((name || '名無し') + 'さんをBANしました。', 'success');
+    });
   }
   function unbanUser(uid){
     remove(ref(db, 'bans/' + uid));
+    showToast('BANを解除しました。', 'success');
   }
 
   // ============== ログイン（Google） ==============
@@ -1591,7 +1712,7 @@
   // （視聴・再生・閲覧はログインなしで誰でもできます）
   document.getElementById('loginBtn').addEventListener('click', function(){
     signInWithPopup(auth, googleProvider).catch(function(err){
-      alert('ログインに失敗しました：' + (err && err.message ? err.message : err));
+      showToast('ログインに失敗しました：' + (err && err.message ? err.message : err), 'error');
     });
   });
 
@@ -1611,7 +1732,7 @@
       box.innerHTML = '<button class="btn btn-primary" id="loginBtn" type="button">🔑 ログイン</button>';
       document.getElementById('loginBtn').addEventListener('click', function(){
         signInWithPopup(auth, googleProvider).catch(function(err){
-          alert('ログインに失敗しました：' + (err && err.message ? err.message : err));
+          showToast('ログインに失敗しました：' + (err && err.message ? err.message : err), 'error');
         });
       });
     }
@@ -1632,11 +1753,11 @@
   // 配信・コメント・ショップ・曲投稿・リスナーの声、ログインが必要な操作の前にこれを呼ぶ
   function requireLogin(){
     if(!currentUser){
-      alert('この操作にはログインが必要です。右上の「ログイン」から、Googleアカウントでログインしてください。');
+      showToast('この操作にはログインが必要です。右上の「ログイン」から、Googleアカウントでログインしてください。', 'error');
       return null;
     }
     if(isBanned(currentUser.uid)){
-      alert('あなたのアカウントは現在、投稿・配信などの利用が制限されています。');
+      showToast('あなたのアカウントは現在、投稿・配信などの利用が制限されています。', 'error');
       return null;
     }
     return getPublicName();
@@ -1672,8 +1793,10 @@
   }
 
   onAuthStateChanged(auth, function(user){
+    var justLoggedIn = !currentUser && user;
     currentUser = user;
     updateAuthUI();
+    if(justLoggedIn) handleReferral(user.uid);
   });
 
   var ICE_SERVERS = { iceServers: [
@@ -1733,6 +1856,21 @@
   }
 
   var SITE_URL = 'https://eo8883494-png.github.io/';
+
+  // ---------- 🎁 友達を紹介してポイントGET ----------
+  var REFERRAL_BONUS = 15;
+  function handleReferral(uid){
+    var params = new URLSearchParams(window.location.search);
+    var referrerUid = params.get('ref');
+    if(!referrerUid || referrerUid === uid) return;
+    get(ref(db, 'profiles/' + uid)).then(function(snap){
+      if(snap.exists()) return; // 既存ユーザーには適用しない（初回ログインのみ）
+      set(ref(db, 'profiles/' + uid + '/referredBy'), referrerUid);
+      runTransaction(ref(db, 'profiles/' + uid + '/spent'), function(c){ return (c || 0) - REFERRAL_BONUS; });
+      runTransaction(ref(db, 'profiles/' + referrerUid + '/spent'), function(c){ return (c || 0) - REFERRAL_BONUS; });
+      showToast('🎉 招待ボーナスで' + REFERRAL_BONUS + 'pt もらいました！', 'success');
+    }).catch(function(){});
+  }
   function shareContent(text){
     if(navigator.share){
       navigator.share({ title: 'zzZ FM', text: text, url: SITE_URL }).catch(function(){});
@@ -1741,18 +1879,27 @@
     }
   }
 
-  var copyLinkBtn = document.getElementById('copyLinkBtn');
-  if(copyLinkBtn) copyLinkBtn.addEventListener('click', function(){
+  function copyTextToClipboard(text, btn){
     var done = function(){
-      var original = copyLinkBtn.textContent;
-      copyLinkBtn.textContent = '✅ コピーしました！';
-      setTimeout(function(){ copyLinkBtn.textContent = original; }, 2000);
+      var original = btn.textContent;
+      btn.textContent = '✅ コピーしました！';
+      setTimeout(function(){ btn.textContent = original; }, 2000);
     };
     if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(SITE_URL).then(done).catch(function(){ prompt('このURLをコピーしてください:', SITE_URL); });
+      navigator.clipboard.writeText(text).then(done).catch(function(){ prompt('このURLをコピーしてください:', text); });
     } else {
-      prompt('このURLをコピーしてください:', SITE_URL);
+      prompt('このURLをコピーしてください:', text);
     }
+  }
+
+  var copyLinkBtn = document.getElementById('copyLinkBtn');
+  if(copyLinkBtn) copyLinkBtn.addEventListener('click', function(){ copyTextToClipboard(SITE_URL, copyLinkBtn); });
+
+  var copyReferralBtn = document.getElementById('copyReferralBtn');
+  if(copyReferralBtn) copyReferralBtn.addEventListener('click', function(){
+    if(!requireLogin()) return;
+    var input = document.getElementById('referralLinkInput');
+    copyTextToClipboard(input.value, copyReferralBtn);
   });
 
   function nearestLive(freq, excludeId){
@@ -1829,9 +1976,12 @@
     if(isAdmin()){
       var stopOneBtn = document.getElementById('adminStopOneBtn');
       if(stopOneBtn) stopOneBtn.addEventListener('click', function(){
-        if(!confirm(escapeHtml(item.name || '名無し') + 'さんの配信を強制終了しますか？')) return;
-        remove(ref(db, 'live/broadcasts/' + id));
-        if(listeningBroadcastId === id) leaveBroadcast();
+        showConfirm((item.name || '名無し') + 'さんの配信を強制終了しますか？').then(function(ok){
+          if(!ok) return;
+          remove(ref(db, 'live/broadcasts/' + id));
+          if(listeningBroadcastId === id) leaveBroadcast();
+          showToast('配信を強制終了しました。', 'success');
+        });
       });
       var banBtn = document.getElementById('adminBanBroadcasterBtn');
       if(banBtn) banBtn.addEventListener('click', function(){
@@ -1891,7 +2041,7 @@
     if(!name) return;
     var freq = parseFloat(dial.value);
     if(!isFreqFree(freq)){
-      alert('この周波数は他の番組・配信と被っています。ダイヤルを少しずらしてから、もう一度試してください。');
+      showToast('この周波数は他の番組・配信と被っています。ダイヤルを少しずらしてから、もう一度試してください。', 'error');
       return;
     }
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
@@ -1941,7 +2091,7 @@
         });
       });
     }).catch(function(){
-      alert('マイクを使うには許可が必要です。ブラウザの設定をご確認ください。');
+      showToast('マイクを使うには許可が必要です。ブラウザの設定をご確認ください。', 'error');
     });
   });
 
@@ -2049,11 +2199,13 @@
   // ============== 管理者用：すべての配信を強制終了 ==============
   adminStopBtn.addEventListener('click', function(){
     if(!isAdmin()) return;
-    if(!confirm('本当に、今ある配信をすべて強制終了しますか？')) return;
-    remove(broadcastsRef);
-    if(isBroadcasting) stopBroadcastFn();
-    if(listeningBroadcastId) leaveBroadcast();
-    alert('すべての配信を強制終了しました。');
+    showConfirm('本当に、今ある配信をすべて強制終了しますか？').then(function(ok){
+      if(!ok) return;
+      remove(broadcastsRef);
+      if(isBroadcasting) stopBroadcastFn();
+      if(listeningBroadcastId) leaveBroadcast();
+      showToast('すべての配信を強制終了しました。', 'success');
+    });
   });
 
   // ============== リスナーの声（みんなで共有するメッセージウォール） ==============
@@ -2062,7 +2214,9 @@
     var delBtn = e.target.closest('[data-admin-delete-msg]');
     if(delBtn){
       var msgId = delBtn.getAttribute('data-admin-delete-msg');
-      if(confirm('この投稿を削除しますか？元に戻せません。')) remove(ref(db, 'wall/messages/' + msgId));
+      showConfirm('この投稿を削除しますか？元に戻せません。').then(function(ok){
+        if(ok){ remove(ref(db, 'wall/messages/' + msgId)); showToast('削除しました。', 'success'); }
+      });
       return;
     }
     var banBtn = e.target.closest('[data-admin-ban-msg]');
@@ -2381,7 +2535,7 @@
       a.remove();
       setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
     }).catch(function(){
-      alert('ダウンロードの書き出しに失敗しました。');
+      showToast('ダウンロードの書き出しに失敗しました。', 'error');
     }).then(function(){
       if(btn){ btn.textContent = originalLabel; btn.disabled = false; }
     });
@@ -2403,6 +2557,7 @@
         '<div>' +
           '<p class="track-name">' + escapeHtml(t.title) + '</p>' +
           '<p class="track-artist">' + decorateName(t.artist || '名無し', t.uid) + crownBadge(t.artist) + regularBadge(t.uid) + '</p>' +
+          (t.tags && t.tags.length ? '<div class="track-tags">' + t.tags.map(function(tg){ return '<span class="track-tag-chip">' + moodLabel(tg) + '</span>'; }).join('') + '</div>' : '') +
         '</div>' +
         '<div class="track-foot">' +
           '<button class="play-btn" type="button" aria-label="試聴する">▶</button>' +
@@ -2445,8 +2600,9 @@
 
     var delBtn = cardEl.querySelector('[data-admin-delete]');
     if(delBtn) delBtn.addEventListener('click', function(){
-      if(!confirm('「' + t.title + '」を削除しますか？元に戻せません。')) return;
-      remove(ref(db, 'tracks/' + id));
+      showConfirm('「' + t.title + '」を削除しますか？元に戻せません。').then(function(ok){
+        if(ok){ remove(ref(db, 'tracks/' + id)); showToast('削除しました。', 'success'); }
+      });
     });
     var banTrackBtn = cardEl.querySelector('[data-admin-ban]');
     if(banTrackBtn) banTrackBtn.addEventListener('click', function(){
@@ -2564,10 +2720,17 @@
     var sortBy = librarySortSelect ? librarySortSelect.value : 'newest';
 
     var ids = Object.keys(communityTracks).filter(function(id){
-      if(!query) return true;
       var t = communityTracks[id];
-      var haystack = ((t.title || '') + ' ' + (t.artist || '')).toLowerCase();
-      return haystack.indexOf(query) !== -1;
+      if(query){
+        var haystack = ((t.title || '') + ' ' + (t.artist || '')).toLowerCase();
+        if(haystack.indexOf(query) === -1) return false;
+      }
+      if(libraryTagFilters.length > 0){
+        var trackTags = t.tags || [];
+        var matches = libraryTagFilters.some(function(tag){ return trackTags.indexOf(tag) !== -1; });
+        if(!matches) return false;
+      }
+      return true;
     });
 
     ids.sort(function(a, b){
@@ -2579,7 +2742,7 @@
     });
 
     var entries = ids.map(function(id){ return { id: id, track: communityTracks[id] }; });
-    var emptyMsg = query ? '「' + escapeHtml(query) + '」に一致する曲は見つかりませんでした。' : 'まだ投稿はありません。下のフォームから最初の1曲を作ってみませんか。';
+    var emptyMsg = (query || libraryTagFilters.length) ? '一致する曲は見つかりませんでした。' : 'まだ投稿はありません。下のフォームから最初の1曲を作ってみませんか。';
     renderGrid(trackLibraryGrid, entries, emptyMsg, libraryUnsubs);
   }
 
@@ -2854,7 +3017,7 @@
     if(cost > 0){
       var balance = getBalance(uid);
       if(balance < cost){
-        alert('ポイントが足りません。あと' + (cost - balance) + 'pt必要です。');
+        showToast('ポイントが足りません。あと' + (cost - balance) + 'pt必要です。', 'error');
         return;
       }
       runTransaction(ref(db, 'profiles/' + uid + '/spent'), function(c){ return (c || 0) + cost; });
@@ -2939,6 +3102,9 @@
 
     var pointsEl = document.getElementById('profilePoints');
     if(pointsEl) pointsEl.textContent = getBalance(currentUser.uid);
+
+    var referralInput = document.getElementById('referralLinkInput');
+    if(referralInput) referralInput.value = SITE_URL + '?ref=' + currentUser.uid;
 
     var prof = getMyProfile();
     var hasAny = false;
@@ -3031,6 +3197,82 @@
   var composerTitleInput = document.getElementById('composerTitle');
   var composerArtistInput = document.getElementById('composerArtist');
   var composerNoteText = document.getElementById('composerNote');
+
+  // ---------- 🎯 今日のテーマ ----------
+  var DAILY_THEMES = [
+    '🌙 静かな夜', '☔ 雨上がり', '🚃 終電', '🌃 ネオン街', '💌 届かない手紙',
+    '🌌 流れ星', '☎️ 深夜の電話', '🛏️ まどろみ', '🌫️ 霧の中', '🕯️ ろうそくの灯り',
+    '🌊 波の音', '📻 古いラジオ', '🐱 野良猫', '🌸 散りゆく花', '⏰ 午前3時',
+    '🚪 開かないドア', '🌧️ 窓を打つ雨', '🌟 願いごと', '🍵 冷めた紅茶', '🌉 橋の上から',
+    '📖 読み終えた本', '🎐 風鈴の音', '🌑 新月の夜', '🚶 夜の散歩', '💭 まだ見ぬ夢',
+    '🛤️ 終わらない線路', '🌆 帰り道', '🕰️ 止まった時計', '🌫️ おぼろ月夜', '🎙️ 誰にも聞かれない声'
+  ];
+  var dailyThemeTextEl = document.getElementById('dailyThemeText');
+  var todaysTheme = DAILY_THEMES[Math.floor(Date.now() / 86400000) % DAILY_THEMES.length];
+  if(dailyThemeTextEl) dailyThemeTextEl.textContent = todaysTheme;
+  var hlThemeValueEl = document.getElementById('hlThemeValue');
+  if(hlThemeValueEl) hlThemeValueEl.textContent = todaysTheme;
+
+  // ---------- 🏷️ ムードタグ ----------
+  var MOOD_TAGS = [
+    { id: 'sad', label: '😢 切ない' },
+    { id: 'happy', label: '😊 楽しい' },
+    { id: 'calm', label: '😌 落ち着く' },
+    { id: 'nostalgic', label: '🌇 ノスタルジック' },
+    { id: 'mystic', label: '🌀 不思議' },
+    { id: 'intense', label: '🔥 激しい' },
+    { id: 'romantic', label: '💕 ロマンチック' },
+    { id: 'fresh', label: '🍃 さわやか' }
+  ];
+  function moodLabel(id){
+    var m = MOOD_TAGS.filter(function(t){ return t.id === id; })[0];
+    return m ? m.label : id;
+  }
+
+  var composerSelectedTags = [];
+  var moodTagPickerEl = document.getElementById('moodTagPicker');
+  function renderMoodTagPicker(){
+    if(!moodTagPickerEl) return;
+    moodTagPickerEl.innerHTML = MOOD_TAGS.map(function(tag){
+      var active = composerSelectedTags.indexOf(tag.id) !== -1;
+      return '<button type="button" class="mood-tag-btn' + (active ? ' active' : '') + '" data-mood="' + tag.id + '">' + tag.label + '</button>';
+    }).join('');
+    moodTagPickerEl.querySelectorAll('.mood-tag-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = btn.getAttribute('data-mood');
+        var idx = composerSelectedTags.indexOf(id);
+        if(idx !== -1){
+          composerSelectedTags.splice(idx, 1);
+        } else {
+          if(composerSelectedTags.length >= 3){ showToast('ムードは最大3つまで選べます。', 'error'); return; }
+          composerSelectedTags.push(id);
+        }
+        renderMoodTagPicker();
+      });
+    });
+  }
+  renderMoodTagPicker();
+
+  // ---------- ライブラリのタグ絞り込み ----------
+  var libraryTagFilters = [];
+  var libraryTagFilterEl = document.getElementById('libraryTagFilter');
+  function renderLibraryTagFilter(){
+    if(!libraryTagFilterEl) return;
+    libraryTagFilterEl.innerHTML = MOOD_TAGS.map(function(tag){
+      var active = libraryTagFilters.indexOf(tag.id) !== -1;
+      return '<button type="button" class="mood-tag-btn' + (active ? ' active' : '') + '" data-mood-filter="' + tag.id + '">' + tag.label + '</button>';
+    }).join('');
+    libraryTagFilterEl.querySelectorAll('.mood-tag-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = btn.getAttribute('data-mood-filter');
+        var idx = libraryTagFilters.indexOf(id);
+        if(idx !== -1){ libraryTagFilters.splice(idx, 1); } else { libraryTagFilters.push(id); }
+        renderLibraryTagFilter();
+        renderLibrary();
+      });
+    });
+  }
+  renderLibraryTagFilter();
 
   function renderNoteSeq(){
     if(composerSequence.length === 0){
@@ -3204,10 +3446,12 @@
     if(!title){ composerNoteText.textContent = '曲名を入力してください。'; return; }
     if(composerSequence.length < 2){ composerNoteText.textContent = '音符を2つ以上選んでください。'; return; }
     var melody = composerSequence.map(function(n){ return n.freq; });
-    push(ref(db, 'tracks'), { title: title, artist: artist, uid: currentUser.uid, melody: melody, durationSeconds: duration, waveform: currentWaveform, stepTime: stepTime, createdAt: Date.now() });
+    push(ref(db, 'tracks'), { title: title, artist: artist, uid: currentUser.uid, melody: melody, durationSeconds: duration, waveform: currentWaveform, stepTime: stepTime, tags: composerSelectedTags.slice(), createdAt: Date.now() });
     composerNoteText.textContent = '投稿しました！下のライブラリに表示されます。';
     composerTitleInput.value = '';
     composerSequence = [];
+    composerSelectedTags = [];
+    renderMoodTagPicker();
     renderNoteSeq();
   });
 
@@ -3246,7 +3490,7 @@
         }).join('');
       }
     }).catch(function(){
-      alert('読み込みに失敗しました。');
+      showToast('読み込みに失敗しました。', 'error');
     });
   });
 
