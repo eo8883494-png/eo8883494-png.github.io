@@ -1308,7 +1308,6 @@
 </div>
 
 <script>
-(function(){
   // ---------- bars setup ----------
   var barsEl = document.getElementById('bars');
   var BAR_COUNT = 32;
@@ -1706,7 +1705,6 @@
     requestAnimationFrame(raf);
   }
   raf();
-})();
 </script>
 
 <script type="module">
@@ -2136,7 +2134,7 @@
     snippet.className = 'snippet live';
     snippet.innerHTML =
       '<p class="snippet-eyebrow">🔴 LIVE · ' + item.freq.toFixed(1) + ' MHz</p>' +
-      '<p class="snippet-title">' + escapeHtml(item.name || '名無し') + 'さんが配信中</p>' +
+      '<p class="snippet-title">' + decorateName(item.name || '名無し', item.uid) + 'さんが配信中</p>' +
       '<p class="snippet-desc">' + (isHost ? 'これはあなたの配信です。' : (joined ? '今、聴いています。' : 'タップして聴いてみましょう。')) + '</p>' +
       (isHost ? '' : '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
         '<button class="btn btn-primary" id="liveJoinBtn" type="button">' + (joined ? '⏹ 聴くのをやめる' : '📻 聴く') + '</button>' +
@@ -2192,7 +2190,7 @@
       }
       listEl.innerHTML = ids.map(function(cid){
         var c = data[cid];
-        return '<p class="comment-item"><span class="comment-name">' + escapeHtml(c.name || '名無し') + '</span>' + escapeHtml(c.text || '') + '</p>';
+        return '<p class="comment-item"><span class="comment-name">' + decorateName(c.name || '名無し', c.uid) + '</span>' + escapeHtml(c.text || '') + '</p>';
       }).join('');
       listEl.scrollTop = listEl.scrollHeight;
     });
