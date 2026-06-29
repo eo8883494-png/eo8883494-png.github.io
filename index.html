@@ -519,6 +519,20 @@
     font-size:1.3rem; background:var(--panel-2); border:1px solid var(--line-strong);
     border-radius:50%; cursor:default;
   }
+  .achievement-list-toggle{ font-size:0.74rem; }
+  .achievement-list{ display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+  .achievement-list-item{
+    display:flex; gap:12px; align-items:center; padding:10px 12px; border-radius:10px;
+    background:var(--panel-2); border:1px solid var(--line); opacity:0.55;
+  }
+  .achievement-list-item.earned{ opacity:1; border-color:rgba(61,255,160,0.35); background:rgba(61,255,160,0.06); }
+  .achievement-list-icon{ font-size:1.5rem; flex-shrink:0; width:36px; text-align:center; }
+  .achievement-list-info{ flex:1; min-width:0; }
+  .achievement-list-label{ font-weight:700; font-size:0.88rem; }
+  .achievement-list-desc{ color:var(--muted); font-size:0.76rem; margin-top:2px; }
+  .achievement-progress-bar{ height:5px; border-radius:4px; background:var(--line); margin-top:6px; overflow:hidden; }
+  .achievement-progress-fill{ height:100%; background:var(--green); border-radius:4px; }
+  .achievement-progress-text{ font-family:var(--font-mono); font-size:0.66rem; color:var(--muted-2); margin-top:3px; }
   .comment-form{ display:flex; gap:8px; flex-wrap:wrap; }
   .comment-form input{ flex:1; min-width:90px; }
   .comment-name-input{ flex:0 0 90px; }
@@ -3075,6 +3089,7 @@
         var text = (input.value || '').trim().slice(0, 80);
         if(!text) return;
         push(ref(db, 'tracks/' + id + '/comments'), { name: name, uid: currentUser.uid, text: text, createdAt: Date.now() });
+        runTransaction(ref(db, 'profiles/' + currentUser.uid + '/commentsPosted'), function(c){ return (c || 0) + 1; });
         if(t.uid && t.uid !== currentUser.uid){
           push(ref(db, 'notifications/' + t.uid), {
             type: 'comment', trackId: id, trackTitle: t.title, fromName: name, fromUid: currentUser.uid,
@@ -3236,16 +3251,31 @@
 
   // ---------- 🏆 実績バッジ（自動で解除される、購入とは別の称号） ----------
   var ACHIEVEMENTS = [
-    { id: 'first_track', icon: '🎉', label: 'はじめての一歩', desc: '曲を1曲投稿した' },
-    { id: 'five_tracks', icon: '🎵', label: '作曲家', desc: '曲を5曲投稿した' },
-    { id: 'first_message', icon: '💬', label: 'はじめての一言', desc: 'リスナーの声に投稿した' },
-    { id: 'first_broadcast', icon: '📡', label: 'はじめての電波', desc: '配信した' },
-    { id: 'likes_10', icon: '❤️', label: '愛されリスナー', desc: '曲が合計10いいねされた' },
-    { id: 'likes_50', icon: '🔥', label: '大人気', desc: '曲が合計50いいねされた' },
-    { id: 'regular', icon: '🌟', label: '常連リスナー', desc: '常連リスナーに認定された' },
-    { id: 'first_follow', icon: '🤝', label: 'はじめてのフォロー', desc: '誰かをフォローした' },
-    { id: 'popular_5', icon: '👀', label: '人気者', desc: 'フォロワーが5人になった' }
+    { id: 'track_1', icon: '🎉', label: 'はじめての一歩', desc: '曲を1曲投稿する', stat: 'trackCount', target: 1 },
+    { id: 'track_5', icon: '🎵', label: '作曲家', desc: '曲を5曲投稿する', stat: 'trackCount', target: 5 },
+    { id: 'track_10', icon: '🎶', label: 'シンガーソングライター', desc: '曲を10曲投稿する', stat: 'trackCount', target: 10 },
+    { id: 'track_20', icon: '🎼', label: 'マエストロ', desc: '曲を20曲投稿する', stat: 'trackCount', target: 20 },
+    { id: 'likes_10', icon: '❤️', label: '愛されリスナー', desc: '曲が合計10いいねされる', stat: 'totalLikes', target: 10 },
+    { id: 'likes_50', icon: '🔥', label: '大人気', desc: '曲が合計50いいねされる', stat: 'totalLikes', target: 50 },
+    { id: 'likes_100', icon: '💖', label: '伝説のアーティスト', desc: '曲が合計100いいねされる', stat: 'totalLikes', target: 100 },
+    { id: 'message_1', icon: '💬', label: 'はじめての一言', desc: 'リスナーの声に1回投稿する', stat: 'messageCount', target: 1 },
+    { id: 'message_10', icon: '🗣️', label: 'おしゃべり', desc: 'リスナーの声に10回投稿する', stat: 'messageCount', target: 10 },
+    { id: 'message_30', icon: '📣', label: 'コミュニティの顔', desc: 'リスナーの声に30回投稿する', stat: 'messageCount', target: 30 },
+    { id: 'broadcast_1', icon: '📡', label: 'はじめての電波', desc: '配信を1回する', stat: 'broadcastCount', target: 1 },
+    { id: 'broadcast_5', icon: '🎙️', label: 'パーソナリティ', desc: '配信を5回する', stat: 'broadcastCount', target: 5 },
+    { id: 'broadcast_15', icon: '📻', label: '専属DJ', desc: '配信を15回する', stat: 'broadcastCount', target: 15 },
+    { id: 'comment_1', icon: '✍️', label: 'はじめてのコメント', desc: '曲にコメントを1回する', stat: 'commentCount', target: 1 },
+    { id: 'comment_10', icon: '📝', label: 'コメンテーター', desc: '曲にコメントを10回する', stat: 'commentCount', target: 10 },
+    { id: 'follow_1', icon: '🤝', label: 'はじめてのフォロー', desc: '誰かを1人フォローする', stat: 'followingCount', target: 1 },
+    { id: 'follow_10', icon: '👥', label: '交流好き', desc: '10人をフォローする', stat: 'followingCount', target: 10 },
+    { id: 'follower_5', icon: '👀', label: '人気者', desc: 'フォロワーが5人になる', stat: 'followerCount', target: 5 },
+    { id: 'follower_20', icon: '⭐', label: '注目の人', desc: 'フォロワーが20人になる', stat: 'followerCount', target: 20 },
+    { id: 'follower_50', icon: '👑', label: 'インフルエンサー', desc: 'フォロワーが50人になる', stat: 'followerCount', target: 50 },
+    { id: 'regular', icon: '🌙', label: '常連リスナー', desc: '常連リスナーに認定される', stat: 'score', target: 0 }, // targetはレンダー時にREGULAR_THRESHOLDを反映
+    { id: 'shop_1', icon: '🛍️', label: 'はじめてのお買い物', desc: 'ショップで1つ交換する', stat: 'ownedCount', target: 1 },
+    { id: 'shop_5', icon: '🎁', label: 'コレクター', desc: 'ショップで5つ交換する', stat: 'ownedCount', target: 5 }
   ];
+  ACHIEVEMENTS.filter(function(a){ return a.id === 'regular'; }).forEach(function(a){ a.target = REGULAR_THRESHOLD; });
 
   function getAchievementStats(uid){
     var trackIds = Object.keys(communityTracks).filter(function(id){ return communityTracks[id].uid === uid; });
@@ -3258,41 +3288,65 @@
       totalLikes: totalLikes,
       messageCount: wallMessagesByUid[uid] || 0,
       broadcastCount: broadcastsByUid[uid] || 0,
+      commentCount: prof.commentsPosted || 0,
       score: regularScoresByUid[uid] || 0,
       followerCount: Object.keys(followersMap).filter(function(k){ return followersMap[k]; }).length,
-      followingCount: Object.keys(followingMap).filter(function(k){ return followingMap[k]; }).length
+      followingCount: Object.keys(followingMap).filter(function(k){ return followingMap[k]; }).length,
+      ownedCount: Object.keys(prof.owned || {}).length
     };
   }
 
-  function isAchievementEarned(id, stats){
-    switch(id){
-      case 'first_track': return stats.trackCount >= 1;
-      case 'five_tracks': return stats.trackCount >= 5;
-      case 'first_message': return stats.messageCount >= 1;
-      case 'first_broadcast': return stats.broadcastCount >= 1;
-      case 'likes_10': return stats.totalLikes >= 10;
-      case 'likes_50': return stats.totalLikes >= 50;
-      case 'regular': return stats.score >= REGULAR_THRESHOLD;
-      case 'first_follow': return stats.followingCount >= 1;
-      case 'popular_5': return stats.followerCount >= 5;
-      default: return false;
-    }
+  function isAchievementEarned(a, stats){
+    return (stats[a.stat] || 0) >= a.target;
   }
 
   function getEarnedAchievements(uid){
     var stats = getAchievementStats(uid);
-    return ACHIEVEMENTS.filter(function(a){ return isAchievementEarned(a.id, stats); });
+    return ACHIEVEMENTS.filter(function(a){ return isAchievementEarned(a, stats); });
   }
 
   function achievementsHtml(uid){
     var earned = getEarnedAchievements(uid);
-    if(earned.length === 0){
-      return '<p class="comment-empty">まだ実績がありません。曲を投稿したり配信したりすると解除されます。</p>';
-    }
-    return '<div class="achievement-row">' + earned.map(function(a){
+    var empty = '<p class="comment-empty">まだ実績がありません。曲を投稿したり配信したりすると解除されます。</p>';
+    var body = earned.length === 0 ? empty : '<div class="achievement-row">' + earned.map(function(a){
       return '<span class="achievement-badge" title="' + escapeHtml(a.label) + '：' + escapeHtml(a.desc) + '">' + a.icon + '</span>';
     }).join('') + '</div>';
+    return body +
+      '<button type="button" class="admin-link achievement-list-toggle" data-achv-uid="' + uid + '" style="margin-top:8px;">📋 すべての実績を見る（' + earned.length + '/' + ACHIEVEMENTS.length + '）</button>' +
+      '<div class="achievement-list" id="achv-list-' + uid + '" style="display:none;"></div>';
   }
+
+  function allAchievementsHtml(uid){
+    var stats = getAchievementStats(uid);
+    return ACHIEVEMENTS.map(function(a){
+      var earned = isAchievementEarned(a, stats);
+      var cur = Math.min(stats[a.stat] || 0, a.target);
+      var pct = Math.round(cur / a.target * 100);
+      return '<div class="achievement-list-item' + (earned ? ' earned' : '') + '">' +
+        '<span class="achievement-list-icon">' + a.icon + '</span>' +
+        '<div class="achievement-list-info">' +
+          '<div class="achievement-list-label">' + escapeHtml(a.label) + (earned ? ' ✅' : '') + '</div>' +
+          '<div class="achievement-list-desc">' + escapeHtml(a.desc) + '</div>' +
+          (!earned ? '<div class="achievement-progress-bar"><div class="achievement-progress-fill" style="width:' + pct + '%;"></div></div><div class="achievement-progress-text">' + cur + ' / ' + a.target + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('.achievement-list-toggle');
+    if(!btn) return;
+    var uid = btn.getAttribute('data-achv-uid');
+    var listEl = document.getElementById('achv-list-' + uid);
+    if(!listEl) return;
+    var isOpen = listEl.style.display !== 'none';
+    if(isOpen){
+      listEl.style.display = 'none';
+    } else {
+      listEl.innerHTML = allAchievementsHtml(uid);
+      listEl.style.display = '';
+    }
+  });
 
   function renderArtistRanking(){
     if(!artistRankingEl) return;
