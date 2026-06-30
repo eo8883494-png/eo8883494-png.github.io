@@ -621,6 +621,14 @@
   .wave-btn.active{ color:var(--pink); border-color:rgba(255,61,127,0.5); background:rgba(255,61,127,0.08); }
 
   .chord-picker{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .chord-template-picker{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+  .chord-template-card{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    padding:12px 16px; border-radius:10px; border:1px solid var(--line-strong); background:var(--panel-2);
+  }
+  .chord-template-name{ font-weight:700; font-size:0.88rem; }
+  .chord-template-chords{ font-family:var(--font-mono); font-size:0.74rem; color:var(--muted); margin-top:2px; }
+  .chord-template-card .btn{ flex-shrink:0; }
   .chord-btn{
     width:48px; height:48px; border-radius:10px; border:1px solid var(--line-strong);
     background:linear-gradient(180deg, var(--panel-2), var(--panel)); color:var(--text);
@@ -1152,6 +1160,24 @@
         </div>
 
         <div class="note-seq" id="noteSeq"><span class="note-seq-empty">音符をタップして、メロディーを作ってみましょう（2〜32音）</span></div>
+
+        <hr class="divider">
+
+        <p class="snippet-eyebrow">🎼 コード進行テンプレ</p>
+        <p class="broadcast-desc" style="margin-top:0;">よく使われる進行を選ぶと、ベース・コード・簡単なドラムが自動で組まれます（バンド編成が自動でONになります）。</p>
+        <div class="chord-template-picker" id="chordTemplatePicker"></div>
+
+        <p class="snippet-eyebrow" style="margin-top:20px;">🎲 おまかせ作曲</p>
+        <p class="broadcast-desc" style="margin-top:0;">雰囲気を選んでボタンを押すと、メロディ・ベース・コード・ドラムをまとめて自動で作ります。気に入らなければ何度でも作り直せます。</p>
+        <div class="wave-picker" id="autoMoodPicker">
+          <button type="button" class="wave-btn active" data-mood="chill">😌 落ち着く</button>
+          <button type="button" class="wave-btn" data-mood="pop">😊 ポップ</button>
+          <button type="button" class="wave-btn" data-mood="sad">😢 切ない</button>
+          <button type="button" class="wave-btn" data-mood="energetic">🔥 アガる</button>
+        </div>
+        <div class="composer-actions">
+          <button type="button" class="btn btn-primary" id="autoComposeBtn">🎲 おまかせで作ってみる</button>
+        </div>
 
         <div class="band-toggle-row" style="margin-top:18px;">
           <button type="button" class="btn btn-primary" id="bandModeToggle">🎸 バンド編成にする（ベース・ドラムを追加）</button>
@@ -4478,6 +4504,47 @@
   var composerArtistInput = document.getElementById('composerArtist');
   var composerNoteText = document.getElementById('composerNote');
 
+  // ---------- 🎼 音楽理論ヘルパー（コード名→周波数の変換） ----------
+  var NOTE_TO_SEMITONE = { C:0, 'C#':1, D:2, 'D#':3, E:4, F:5, 'F#':6, G:7, 'G#':8, A:9, 'A#':10, B:11 };
+  var CHORD_TYPE_INTERVALS = {
+    maj: [0,4,7], m: [0,3,7], maj7: [0,4,7,11], m7: [0,3,7,10],
+    7: [0,4,7,10], 6: [0,4,7,9], m6: [0,3,7,9], dim: [0,3,6], sus4: [0,5,7]
+  };
+  function midiForNote(root, octave){ return (octave + 1) * 12 + NOTE_TO_SEMITONE[root]; }
+  function freqFromMidi(midi){ return 440 * Math.pow(2, (midi - 69) / 12); }
+  function chordFreqs(root, type, octave){
+    var baseMidi = midiForNote(root, octave);
+    return (CHORD_TYPE_INTERVALS[type] || CHORD_TYPE_INTERVALS.maj).map(function(iv){ return freqFromMidi(baseMidi + iv); });
+  }
+  function chordLabel(root, type){
+    var suffix = { maj: '', m: 'm', maj7: 'maj7', m7: 'm7', 7: '7', 6: '6', m6: 'm6', dim: 'dim', sus4: 'sus4' }[type] || '';
+    return root + suffix;
+  }
+
+  // ---------- 🎼 コード進行テンプレ（よく使われる進行のプリセット） ----------
+  var CHORD_PROGRESSIONS = [
+    {
+      id: 'circle', label: '王道進行（丸の進行）', desc: 'Am→F→C→G',
+      chords: [{root:'A',type:'m'},{root:'F',type:'maj'},{root:'C',type:'maj'},{root:'G',type:'maj'}]
+    },
+    {
+      id: 'komuro', label: '小室進行', desc: 'Am→F→G→C',
+      chords: [{root:'A',type:'m'},{root:'F',type:'maj'},{root:'G',type:'maj'},{root:'C',type:'maj'}]
+    },
+    {
+      id: 'canon', label: 'カノン進行', desc: 'C→G→Am→Em→F→C→F→G',
+      chords: [{root:'C',type:'maj'},{root:'G',type:'maj'},{root:'A',type:'m'},{root:'E',type:'m'},{root:'F',type:'maj'},{root:'C',type:'maj'},{root:'F',type:'maj'},{root:'G',type:'maj'}]
+    },
+    {
+      id: 'jazzy', label: 'おしゃれ進行', desc: 'Am7→Fmaj7→Cmaj7→G6',
+      chords: [{root:'A',type:'m7'},{root:'F',type:'maj7'},{root:'C',type:'maj7'},{root:'G',type:'6'}]
+    },
+    {
+      id: 'sad', label: '切ない進行', desc: 'Fmaj7→G→Em7→Am7',
+      chords: [{root:'F',type:'maj7'},{root:'G',type:'maj'},{root:'E',type:'m7'},{root:'A',type:'m7'}]
+    }
+  ];
+
   // ---------- 🎯 今日のテーマ ----------
   var DAILY_THEMES = [
     '🌙 静かな夜', '☔ 雨上がり', '🚃 終電', '🌃 ネオン街', '💌 届かない手紙',
@@ -4705,6 +4772,8 @@
   var bandModeEnabled = false;
   var bassSequence = [];
   var bassWaveform = 'sine';
+  var chordSequence = []; // コード進行テンプレ・おまかせ作曲で使う「コード伴奏」専用レーン
+  var appliedTemplateLabel = '';
   var DRUM_STEP_COUNT = 16;
 
   // 選べるドラムパーツの全リスト（playDrumHitで合成している音色と対応）
@@ -4833,10 +4902,164 @@
     renderDrumGrid();
   });
 
+  // ---------- 🎼 コード進行テンプレの適用 ----------
+  var STEPS_PER_CHORD = 8; // テンプレの1コードあたりの長さ（1小節相当）
+
+  function renderAppliedTemplateStatus(){
+    var el = document.getElementById('chordTemplateStatus');
+    if(!appliedTemplateLabel){
+      if(el) el.remove();
+      return;
+    }
+    if(!el){
+      el = document.createElement('p');
+      el.className = 'audio-note';
+      el.id = 'chordTemplateStatus';
+      document.getElementById('chordTemplatePicker').insertAdjacentElement('afterend', el);
+    }
+    el.innerHTML = '🎼 適用中：' + escapeHtml(appliedTemplateLabel) + ' <button type="button" class="admin-link" id="clearChordTemplateBtn">クリア</button>';
+    var clearBtn = document.getElementById('clearChordTemplateBtn');
+    if(clearBtn) clearBtn.addEventListener('click', function(){
+      chordSequence = [];
+      bassSequence = [];
+      appliedTemplateLabel = '';
+      renderBassSeq();
+      renderAppliedTemplateStatus();
+    });
+  }
+
+  function renderChordTemplatePicker(){
+    var picker = document.getElementById('chordTemplatePicker');
+    picker.innerHTML = CHORD_PROGRESSIONS.map(function(tpl){
+      var chordNames = tpl.chords.map(function(c){ return chordLabel(c.root, c.type); }).join(' → ');
+      return '<div class="chord-template-card">' +
+        '<div><div class="chord-template-name">' + escapeHtml(tpl.label) + '</div><div class="chord-template-chords">' + escapeHtml(chordNames) + '</div></div>' +
+        '<button type="button" class="btn btn-primary" data-template="' + tpl.id + '">使う</button>' +
+      '</div>';
+    }).join('');
+    picker.querySelectorAll('[data-template]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var tpl = CHORD_PROGRESSIONS.filter(function(t){ return t.id === btn.getAttribute('data-template'); })[0];
+        if(tpl) applyChordTemplate(tpl);
+      });
+    });
+  }
+  renderChordTemplatePicker();
+
+  // コード進行から、コードレーン・ベースレーン・簡単なドラムパターンをまとめて作る
+  function applyChordTemplate(tpl){
+    var totalSteps = tpl.chords.length * STEPS_PER_CHORD;
+
+    // コード伴奏レーン：各コードの頭（1拍目・3拍目あたり）でストロークするシンプルなパターン
+    var newChordSeq = [];
+    tpl.chords.forEach(function(c){
+      var freqs = chordFreqs(c.root, c.type, 4);
+      var label = chordLabel(c.root, c.type);
+      for(var i = 0; i < STEPS_PER_CHORD; i++){
+        if(i === 0 || i === 4){ newChordSeq.push({ freq: freqs, label: label }); }
+        else { newChordSeq.push({ freq: 0, label: '♪―' }); }
+      }
+    });
+
+    // ベースレーン：コードのルート音を、コードの頭で鳴らす
+    var newBassSeq = [];
+    tpl.chords.forEach(function(c){
+      var rootFreq = freqFromMidi(midiForNote(c.root, 2));
+      for(var i = 0; i < STEPS_PER_CHORD; i++){
+        if(i === 0 || i === 4){ newBassSeq.push({ freq: rootFreq, label: c.root }); }
+        else { newBassSeq.push({ freq: 0, label: '♪―' }); }
+      }
+    });
+
+    // ドラム：定番のキック・スネア・ハイハットだけを使った基本パターンを、コードの数に合わせて敷き詰める
+    activeDrumParts = ['kick', 'snare', 'hihat'];
+    DRUM_STEP_COUNT = totalSteps;
+    ALL_DRUM_PARTS.forEach(function(p){ drumPattern[p[0]] = new Array(DRUM_STEP_COUNT).fill(false); });
+    for(var bar = 0; bar < tpl.chords.length; bar++){
+      var base = bar * STEPS_PER_CHORD;
+      drumPattern.kick[base] = true;
+      drumPattern.kick[base + 3] = true;
+      drumPattern.snare[base + 4] = true;
+      for(var h = 0; h < STEPS_PER_CHORD; h += 2){ drumPattern.hihat[base + h] = true; }
+    }
+
+    chordSequence = newChordSeq;
+    bassSequence = newBassSeq;
+    appliedTemplateLabel = tpl.label + '（' + tpl.desc + '）';
+
+    bandModeEnabled = true;
+    document.getElementById('bandModeSection').style.display = '';
+    var toggleBtn = document.getElementById('bandModeToggle');
+    toggleBtn.textContent = '🎸 バンド編成をやめる（メロディだけに戻す）';
+    toggleBtn.classList.remove('btn-primary');
+
+    renderBassSeq();
+    renderDrumPartPicker();
+    renderDrumGrid();
+    renderAppliedTemplateStatus();
+    showToast('「' + tpl.label + '」を適用しました。ベース・コード・ドラムができています。', 'success');
+  }
+
+  // ---------- 🎲 おまかせ作曲 ----------
+  var autoMood = 'chill';
+  var MOOD_PRESETS = {
+    chill:     { templateId: 'jazzy',  waveform: 'triangle', tempo: '0.32', density: 0.5 },
+    pop:       { templateId: 'circle', waveform: 'square',   tempo: '0.2',  density: 0.65 },
+    sad:       { templateId: 'sad',    waveform: 'sine',     tempo: '0.45', density: 0.4 },
+    energetic: { templateId: 'komuro', waveform: 'sawtooth', tempo: '0.12', density: 0.75 }
+  };
+  document.querySelectorAll('#autoMoodPicker .wave-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#autoMoodPicker .wave-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      autoMood = btn.getAttribute('data-mood');
+    });
+  });
+
+  document.getElementById('autoComposeBtn').addEventListener('click', function(){
+    var preset = MOOD_PRESETS[autoMood];
+    var tpl = CHORD_PROGRESSIONS.filter(function(t){ return t.id === preset.templateId; })[0];
+    if(!tpl) return;
+
+    // テンポ・音色をおまかせモードに合わせて設定
+    document.getElementById('composerTempo').value = preset.tempo;
+    currentWaveform = preset.waveform;
+    document.querySelectorAll('#wavePicker .wave-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-wave') === preset.waveform);
+    });
+
+    // コード・ベース・ドラムをテンプレから組み立て
+    applyChordTemplate(tpl);
+
+    // メロディをコードの構成音からランダムに自動生成（休符も混ぜて、それっぽいリズムに）
+    var totalSteps = tpl.chords.length * STEPS_PER_CHORD;
+    var newMelody = [];
+    tpl.chords.forEach(function(c){
+      var tones = chordFreqs(c.root, c.type, 5); // メロディはコード伴奏より1オクターブ上
+      for(var i = 0; i < STEPS_PER_CHORD; i++){
+        var onBeat = (i % 2 === 0); // 基本は2ステップごとに音を置く骨格にする
+        var place = onBeat ? Math.random() < (preset.density + 0.25) : Math.random() < (preset.density - 0.2);
+        if(place){
+          var tone = tones[Math.floor(Math.random() * tones.length)];
+          newMelody.push({ freq: tone, label: '♪' });
+        } else {
+          newMelody.push({ freq: 0, label: '♪―' });
+        }
+      }
+    });
+    composerSequence = newMelody;
+    renderNoteSeq();
+
+    showToast('🎲 「' + preset.templateId + '」ベースでおまかせ作曲しました。気に入らなければ何度でも作り直せます。', 'success');
+  });
+
   // 今の入力内容から、再生・ダウンロード・投稿で共通して使う「lanes」を組み立てます
   function buildComposerLanes(){
     var lanes = [{ type: 'melody', waveform: currentWaveform, octaveShift: 0, notes: composerSequence.map(function(n){ return n.freq; }) }];
     if(bandModeEnabled){
+      if(chordSequence.length > 0){
+        lanes.push({ type: 'chord', waveform: 'triangle', octaveShift: 0, volume: 0.45, notes: chordSequence.map(function(n){ return n.freq; }) });
+      }
       if(bassSequence.length > 0){
         lanes.push({ type: 'bass', waveform: bassWaveform, octaveShift: 0, volume: 0.85, notes: bassSequence.map(function(n){ return n.freq; }) });
       }
@@ -4856,6 +5079,8 @@
   function resetBandInputs(){
     bandModeEnabled = false;
     bassSequence = [];
+    chordSequence = [];
+    appliedTemplateLabel = '';
     ALL_DRUM_PARTS.forEach(function(p){ drumPattern[p[0]] = new Array(DRUM_STEP_COUNT).fill(false); });
     document.getElementById('bandModeSection').style.display = 'none';
     var toggleBtn = document.getElementById('bandModeToggle');
@@ -4863,6 +5088,7 @@
     toggleBtn.classList.add('btn-primary');
     renderBassSeq();
     renderDrumGrid();
+    renderAppliedTemplateStatus();
   }
 
   document.getElementById('previewNoteBtn').addEventListener('click', function(){
