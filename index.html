@@ -4947,13 +4947,15 @@
   renderChordTemplatePicker();
 
   // コード進行から、コードレーン・ベースレーン・簡単なドラムパターンをまとめて作る
-  function applyChordTemplate(tpl){
+  function applyChordTemplate(tpl, transposeSemitones, drumVariant){
+    transposeSemitones = transposeSemitones || 0;
+    var transposeMul = Math.pow(2, transposeSemitones / 12);
     var totalSteps = tpl.chords.length * STEPS_PER_CHORD;
 
     // コード伴奏レーン：各コードの頭（1拍目・3拍目あたり）でストロークするシンプルなパターン
     var newChordSeq = [];
     tpl.chords.forEach(function(c){
-      var freqs = chordFreqs(c.root, c.type, 4);
+      var freqs = chordFreqs(c.root, c.type, 4).map(function(f){ return f * transposeMul; });
       var label = chordLabel(c.root, c.type);
       for(var i = 0; i < STEPS_PER_CHORD; i++){
         if(i === 0 || i === 4){ newChordSeq.push({ freq: freqs, label: label }); }
@@ -4964,28 +4966,56 @@
     // ベースレーン：コードのルート音を、コードの頭で鳴らす
     var newBassSeq = [];
     tpl.chords.forEach(function(c){
-      var rootFreq = freqFromMidi(midiForNote(c.root, 2));
+      var rootFreq = freqFromMidi(midiForNote(c.root, 2)) * transposeMul;
       for(var i = 0; i < STEPS_PER_CHORD; i++){
         if(i === 0 || i === 4){ newBassSeq.push({ freq: rootFreq, label: c.root }); }
         else { newBassSeq.push({ freq: 0, label: '♪―' }); }
       }
     });
 
-    // ドラム：定番のキック・スネア・ハイハットだけを使った基本パターンを、コードの数に合わせて敷き詰める
+    // ドラム：いくつかパターンのバリエーションを用意し、毎回少し違うノリにする
+    var DRUM_VARIANTS = [
+      // 0: 定番の四つ打ち寄り
+      function(base){
+        drumPattern.kick[base] = true;
+        drumPattern.kick[base + 3] = true;
+        drumPattern.snare[base + 4] = true;
+        for(var h = 0; h < STEPS_PER_CHORD; h += 2){ drumPattern.hihat[base + h] = true; }
+      },
+      // 1: ハイハットを8分でびっしり、スネアにゴーストを追加
+      function(base){
+        drumPattern.kick[base] = true;
+        drumPattern.kick[base + 2] = true;
+        drumPattern.snare[base + 4] = true;
+        if(Math.random() < 0.5) drumPattern.snare[base + 6] = true;
+        for(var h = 0; h < STEPS_PER_CHORD; h++){ drumPattern.hihat[base + h] = true; }
+      },
+      // 2: シンコペーション気味
+      function(base){
+        drumPattern.kick[base] = true;
+        drumPattern.kick[base + 5] = true;
+        drumPattern.snare[base + 4] = true;
+        for(var h = 1; h < STEPS_PER_CHORD; h += 2){ drumPattern.hihat[base + h] = true; }
+        if(Math.random() < 0.4 && activeDrumParts.indexOf('ohihat') === -1){ activeDrumParts.push('ohihat'); }
+        if(activeDrumParts.indexOf('ohihat') !== -1) drumPattern.ohihat[base + 7] = true;
+      }
+    ];
+    var variantIndex = (drumVariant != null) ? drumVariant : Math.floor(Math.random() * DRUM_VARIANTS.length);
     activeDrumParts = ['kick', 'snare', 'hihat'];
     DRUM_STEP_COUNT = totalSteps;
     ALL_DRUM_PARTS.forEach(function(p){ drumPattern[p[0]] = new Array(DRUM_STEP_COUNT).fill(false); });
     for(var bar = 0; bar < tpl.chords.length; bar++){
-      var base = bar * STEPS_PER_CHORD;
-      drumPattern.kick[base] = true;
-      drumPattern.kick[base + 3] = true;
-      drumPattern.snare[base + 4] = true;
-      for(var h = 0; h < STEPS_PER_CHORD; h += 2){ drumPattern.hihat[base + h] = true; }
+      DRUM_VARIANTS[variantIndex](bar * STEPS_PER_CHORD);
+    }
+    // 最後の小節の最後だけ、たまにクラッシュを足して区切りをつける
+    if(Math.random() < 0.5){
+      activeDrumParts.push('crash');
+      drumPattern.crash[totalSteps - STEPS_PER_CHORD] = true;
     }
 
     chordSequence = newChordSeq;
     bassSequence = newBassSeq;
-    appliedTemplateLabel = tpl.label + '（' + tpl.desc + '）';
+    appliedTemplateLabel = tpl.label + '（' + tpl.desc + '）' + (transposeSemitones ? '　キー' + (transposeSemitones > 0 ? '+' : '') + transposeSemitones : '');
 
     bandModeEnabled = true;
     document.getElementById('bandModeSection').style.display = '';
@@ -5002,12 +5032,15 @@
 
   // ---------- 🎲 おまかせ作曲 ----------
   var autoMood = 'chill';
+  // それぞれの雰囲気で「合いそうな候補」を複数用意し、押すたびにランダムに選ぶことで毎回違う仕上がりにします
   var MOOD_PRESETS = {
-    chill:     { templateId: 'jazzy',  waveform: 'triangle', tempo: '0.32', density: 0.5 },
-    pop:       { templateId: 'circle', waveform: 'square',   tempo: '0.2',  density: 0.65 },
-    sad:       { templateId: 'sad',    waveform: 'sine',     tempo: '0.45', density: 0.4 },
-    energetic: { templateId: 'komuro', waveform: 'sawtooth', tempo: '0.12', density: 0.75 }
+    chill:     { templateIds: ['jazzy', 'sad'],          waveforms: ['triangle', 'sine'],          tempos: ['0.32', '0.45'], density: 0.5 },
+    pop:       { templateIds: ['circle', 'canon'],       waveforms: ['square', 'triangle'],        tempos: ['0.2', '0.32'],  density: 0.65 },
+    sad:       { templateIds: ['sad', 'jazzy'],          waveforms: ['sine', 'triangle'],          tempos: ['0.45', '0.32'], density: 0.4 },
+    energetic: { templateIds: ['komuro', 'circle'],      waveforms: ['sawtooth', 'square'],        tempos: ['0.12', '0.2'],  density: 0.75 }
   };
+  function pickRandom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
   document.querySelectorAll('#autoMoodPicker .wave-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       document.querySelectorAll('#autoMoodPicker .wave-btn').forEach(function(b){ b.classList.remove('active'); });
@@ -5018,29 +5051,40 @@
 
   document.getElementById('autoComposeBtn').addEventListener('click', function(){
     var preset = MOOD_PRESETS[autoMood];
-    var tpl = CHORD_PROGRESSIONS.filter(function(t){ return t.id === preset.templateId; })[0];
+    var tpl = CHORD_PROGRESSIONS.filter(function(t){ return t.id === pickRandom(preset.templateIds); })[0];
     if(!tpl) return;
 
-    // テンポ・音色をおまかせモードに合わせて設定
-    document.getElementById('composerTempo').value = preset.tempo;
-    currentWaveform = preset.waveform;
+    // 毎回ランダムに選ぶ要素：使う波形・テンポ・転調・ドラムのバリエーション
+    var waveform = pickRandom(preset.waveforms);
+    var tempo = pickRandom(preset.tempos);
+    var transposeSemitones = pickRandom([-5, -3, -2, 0, 0, 2, 3, 5]); // 0を多めにして極端になりすぎないように
+    var drumVariant = Math.floor(Math.random() * 3);
+
+    document.getElementById('composerTempo').value = tempo;
+    currentWaveform = waveform;
     document.querySelectorAll('#wavePicker .wave-btn').forEach(function(b){
-      b.classList.toggle('active', b.getAttribute('data-wave') === preset.waveform);
+      b.classList.toggle('active', b.getAttribute('data-wave') === waveform);
     });
 
-    // コード・ベース・ドラムをテンプレから組み立て
-    applyChordTemplate(tpl);
+    // コード・ベース・ドラムをテンプレから組み立て（転調・ドラムバリエーションつき）
+    applyChordTemplate(tpl, transposeSemitones, drumVariant);
 
-    // メロディをコードの構成音からランダムに自動生成（休符も混ぜて、それっぽいリズムに）
-    var totalSteps = tpl.chords.length * STEPS_PER_CHORD;
+    // メロディをコードの構成音＋経過音からランダムに自動生成（押すたびに違う旋律になるよう、毎ステップ独立で判定）
+    var transposeMul = Math.pow(2, transposeSemitones / 12);
     var newMelody = [];
     tpl.chords.forEach(function(c){
-      var tones = chordFreqs(c.root, c.type, 5); // メロディはコード伴奏より1オクターブ上
+      var baseTones = chordFreqs(c.root, c.type, 5).map(function(f){ return f * transposeMul; }); // メロディはコード伴奏より1オクターブ上
+      // 経過音として、ルートの全音上（9th相当）も候補に混ぜておくと単調になりにくい
+      var passing = freqFromMidi(midiForNote(c.root, 5) + 2) * transposeMul;
+      var tones = baseTones.concat([passing]);
       for(var i = 0; i < STEPS_PER_CHORD; i++){
-        var onBeat = (i % 2 === 0); // 基本は2ステップごとに音を置く骨格にする
-        var place = onBeat ? Math.random() < (preset.density + 0.25) : Math.random() < (preset.density - 0.2);
+        var place = Math.random() < preset.density;
         if(place){
-          var tone = tones[Math.floor(Math.random() * tones.length)];
+          var idx = Math.floor(Math.random() * tones.length);
+          var tone = tones[idx];
+          // たまに1オクターブ上下に跳ねさせて、表情をつける
+          if(Math.random() < 0.12) tone *= 2;
+          else if(Math.random() < 0.1) tone *= 0.5;
           newMelody.push({ freq: tone, label: '♪' });
         } else {
           newMelody.push({ freq: 0, label: '♪―' });
@@ -5050,7 +5094,7 @@
     composerSequence = newMelody;
     renderNoteSeq();
 
-    showToast('🎲 「' + preset.templateId + '」ベースでおまかせ作曲しました。気に入らなければ何度でも作り直せます。', 'success');
+    showToast('🎲 「' + tpl.label + '」ベースでおまかせ作曲しました（キー' + (transposeSemitones >= 0 ? '+' : '') + transposeSemitones + '）。気に入らなければ何度でも作り直せます。', 'success');
   });
 
   // 今の入力内容から、再生・ダウンロード・投稿で共通して使う「lanes」を組み立てます
