@@ -1903,6 +1903,8 @@
   var auth = getAuth(app);
   var googleProvider = new GoogleAuthProvider();
   var currentUser = null;
+  // ポイントの初期値（baseline）を確定するために、関連データが揃ったかどうかを記録します
+  var dataLoadFlags = { tracks: false, wall: false, broadcasts: false, profiles: false };
 
   // ============== 👥 今見てる人数（ログイン不要・匿名プレゼンス） ==============
   (function(){
@@ -2429,6 +2431,7 @@
       set(newRef, { freq: freq, name: name, uid: currentUser.uid, startedAt: Date.now() });
       onDisconnect(newRef).remove();
       push(ref(db, 'broadcastLog'), { name: name, uid: currentUser.uid, startedAt: Date.now() }); // 常連認定の集計用（配信が終わっても消えない記録）
+      awardPoints(currentUser.uid, SCORE_PER_BROADCAST);
       notifyFollowersOfLive(currentUser.uid, name, freq);
 
       startBtn.style.display = 'none';
@@ -2688,6 +2691,7 @@
       counts[m.uid] = (counts[m.uid] || 0) + 1;
     });
     wallMessagesByUid = counts;
+    dataLoadFlags.wall = true;
     if(typeof refreshLeaderboards === 'function') refreshLeaderboards();
     if(typeof renderProfile === 'function') renderProfile();
     if(typeof renderHighlights === 'function') renderHighlights();
@@ -2720,6 +2724,7 @@
       var text = (wallTextInput.value || '').trim().slice(0, 120);
       if(!text) return;
       push(ref(db, 'wall/messages'), { name: name, uid: currentUser.uid, text: text, createdAt: Date.now() });
+      awardPoints(currentUser.uid, SCORE_PER_WALL_MESSAGE);
       wallTextInput.value = '';
     });
   }
@@ -2731,21 +2736,21 @@
     t2: { title: '雨上がりのモールス信号', artist: 'Static Letters', melody: [164.81, 196.00, 246.94, 293.66], cover: 'c2' },
     t3: { title: 'おやすみシグナル', artist: '三日月レイ', melody: [174.61, 220.00, 261.63, 349.23], cover: 'c3' },
     t4: {
-      title: '午前3時のフロート',
+      title: '夜が明けるまで',
       artist: '三日月レイ',
       cover: 'c4',
-      waveform: 'triangle',
-      stepTime: 0.34,
-      durationSeconds: 180,
+      waveform: 'sawtooth',
+      stepTime: 0.22,
+      durationSeconds: 110,
       melody: [
-        110.00, null, [220.00, 329.63], null, 261.63, null, null, 392.00,
-        220.00, null, [261.63, 392.00], null, 329.63, null, 392.00, null,
-        87.31, null, [174.61, 261.63], null, 220.00, null, null, 329.63,
-        174.61, null, [220.00, 329.63], null, 261.63, null, 329.63, null,
-        130.81, null, [261.63, 392.00], null, 329.63, null, null, 493.88,
-        261.63, null, [329.63, 493.88], null, 392.00, null, 493.88, null,
-        98.00, null, [196.00, 293.66], null, 246.94, null, null, 329.63,
-        196.00, null, [246.94, 329.63], null, 293.66, 293.66, 246.94, 196.00
+        329.63, 293.66, 261.63, null, 293.66, 329.63, 392.00, null,
+        329.63, 293.66, 261.63, 293.66, 329.63, null, 293.66, 261.63,
+        246.94, 220.00, 246.94, 261.63, 293.66, null, 329.63, null,
+        329.63, 349.23, 392.00, 440.00, 493.88, null, 523.25, null,
+        523.25, null, 493.88, 440.00, 392.00, null, 440.00, 493.88,
+        523.25, null, 587.33, null, 523.25, 493.88, 440.00, 392.00,
+        349.23, null, 392.00, 440.00, 493.88, null, 523.25, null,
+        392.00, 349.23, 329.63, 293.66, 261.63, null, null, null
       ]
     }
   };
@@ -3136,6 +3141,7 @@
       heartBtn.classList.toggle('liked', !already);
       set(ref(db, 'profiles/' + uid + '/likedTracks/' + id), already ? null : true);
       runTransaction(ref(db, 'wall/likes/' + id), function(c){ return (c || 0) + (already ? -1 : 1); });
+      if(!already && t.uid && t.uid !== uid){ awardPoints(t.uid, SCORE_PER_LIKE_RECEIVED); }
     });
   }
 
@@ -3193,8 +3199,12 @@
     var query = (librarySearchInput && librarySearchInput.value || '').trim().toLowerCase();
     var sortBy = librarySortSelect ? librarySortSelect.value : 'newest';
 
-    var ids = Object.keys(communityTracks).filter(function(id){
-      var t = communityTracks[id];
+    var allTracks = {};
+    Object.keys(HOUSE_TRACKS).forEach(function(id){ allTracks[id] = HOUSE_TRACKS[id]; });
+    Object.keys(communityTracks).forEach(function(id){ allTracks[id] = communityTracks[id]; });
+
+    var ids = Object.keys(allTracks).filter(function(id){
+      var t = allTracks[id];
       if(query){
         var haystack = ((t.title || '') + ' ' + (t.artist || '')).toLowerCase();
         if(haystack.indexOf(query) === -1) return false;
@@ -3208,14 +3218,14 @@
     });
 
     ids.sort(function(a, b){
-      var ta = communityTracks[a], tb = communityTracks[b];
+      var ta = allTracks[a], tb = allTracks[b];
       if(sortBy === 'oldest') return (ta.createdAt || 0) - (tb.createdAt || 0);
       if(sortBy === 'liked') return (allLikes[b] || 0) - (allLikes[a] || 0);
       if(sortBy === 'title') return (ta.title || '').localeCompare((tb.title || ''), 'ja');
       return (tb.createdAt || 0) - (ta.createdAt || 0); // newest（既定）
     });
 
-    var entries = ids.map(function(id){ return { id: id, track: communityTracks[id] }; });
+    var entries = ids.map(function(id){ return { id: id, track: allTracks[id] }; });
     var emptyMsg = (query || libraryTagFilters.length) ? '一致する曲は見つかりませんでした。' : 'まだ投稿はありません。下のフォームから最初の1曲を作ってみませんか。';
     renderGrid(trackLibraryGrid, entries, emptyMsg, libraryUnsubs);
   }
@@ -3225,6 +3235,7 @@
 
   onValue(ref(db, 'tracks'), function(snap){
     communityTracks = snap.val() || {};
+    dataLoadFlags.tracks = true;
     refreshLeaderboards();
   });
 
@@ -3402,24 +3413,55 @@
     }).join('');
   }
 
+  // ポイントは「いま存在する曲や配信の数」から毎回再計算するのではなく、
+  // 獲得した瞬間に profiles/{uid}/earnedPoints に永続保存し、それを積み上げ方式で参照します。
+  // （こうすることで、曲やリスナーの声を削除してもポイントが減らなくなります）
   function computeRegularScores(){
     var scores = {};
-    function add(uid, amount){
-      if(!uid) return;
-      scores[uid] = (scores[uid] || 0) + amount;
-    }
-    Object.keys(communityTracks).forEach(function(id){
-      var t = communityTracks[id];
-      add(t.uid, SCORE_PER_TRACK);
-      add(t.uid, (allLikes[id] || 0) * SCORE_PER_LIKE_RECEIVED);
-    });
-    Object.keys(wallMessagesByUid).forEach(function(uid){
-      add(uid, wallMessagesByUid[uid] * SCORE_PER_WALL_MESSAGE);
-    });
-    Object.keys(broadcastsByUid).forEach(function(uid){
-      add(uid, broadcastsByUid[uid] * SCORE_PER_BROADCAST);
+    Object.keys(profiles).forEach(function(uid){
+      scores[uid] = (profiles[uid] && profiles[uid].earnedPoints) || 0;
     });
     regularScoresByUid = scores;
+    ensureMyEarnedPointsBaseline();
+  }
+
+  // ライブ計算（旧ロジック）：まだ一度もポイントが記録されていない人の「初期値」を決めるためだけに使います
+  function computeLiveScoreForUid(uid){
+    if(!uid) return 0;
+    var score = 0;
+    Object.keys(communityTracks).forEach(function(id){
+      var t = communityTracks[id];
+      if(t.uid !== uid) return;
+      score += SCORE_PER_TRACK;
+      score += (allLikes[id] || 0) * SCORE_PER_LIKE_RECEIVED;
+    });
+    score += (wallMessagesByUid[uid] || 0) * SCORE_PER_WALL_MESSAGE;
+    score += (broadcastsByUid[uid] || 0) * SCORE_PER_BROADCAST;
+    return score;
+  }
+
+  var myEarnedPointsBaselineChecked = false;
+  function ensureMyEarnedPointsBaseline(){
+    if(myEarnedPointsBaselineChecked) return;
+    if(!currentUser) return;
+    if(!dataLoadFlags.tracks || !dataLoadFlags.wall || !dataLoadFlags.broadcasts || !dataLoadFlags.profiles) return; // 全データが揃うまで待つ
+    myEarnedPointsBaselineChecked = true;
+    var uid = currentUser.uid;
+    var prof = profiles[uid];
+    if(prof && typeof prof.earnedPoints === 'number') return; // すでに記録済み
+    var baseline = computeLiveScoreForUid(uid);
+    runTransaction(ref(db, 'profiles/' + uid + '/earnedPoints'), function(current){
+      if(current === null || current === undefined) return baseline;
+      return; // すでに誰かが設定済みなら何もしない
+    });
+  }
+
+  // 曲投稿・いいね獲得・リスナーの声・配信など、ポイントを獲得した瞬間に呼び出して永続加算します
+  function awardPoints(uid, amount){
+    if(!uid || !amount) return;
+    runTransaction(ref(db, 'profiles/' + uid + '/earnedPoints'), function(current){
+      return (current || 0) + amount;
+    });
   }
 
   function renderRegularBoard(){
@@ -3502,6 +3544,7 @@
       counts[entry.uid] = (counts[entry.uid] || 0) + 1;
     });
     broadcastsByUid = counts;
+    dataLoadFlags.broadcasts = true;
     refreshLeaderboards();
   });
 
@@ -3583,7 +3626,7 @@
   // 戻り値: { cls: 追加クラス(先頭に半角スペース付き), style: style属性の値(中身のみ、空なら'') }
   function headerBgParts(item){
     if(!item) return { cls: '', style: '' };
-    if(item.img) return { cls: '', style: 'background-image:url(' + JSON.stringify(item.img) + ');' };
+    if(item.img) return { cls: '', style: 'background-image:url(' + JSON.stringify(item.img) + '), linear-gradient(120deg, #1d1840, #2a2058);' };
     return { cls: ' ' + item.css, style: '' };
   }
 
@@ -3636,6 +3679,7 @@
 
   onValue(ref(db, 'profiles'), function(snap){
     profiles = snap.val() || {};
+    dataLoadFlags.profiles = true;
     refreshLeaderboards();
     renderShop();
     renderProfile();
@@ -3690,7 +3734,7 @@
       var equipped = prof.equipped && prof.equipped[category] === item.id;
       var iconHtml;
       if(item.img && category === 'header'){
-        iconHtml = '<div style="width:100%; height:46px; border-radius:8px; background-image:url(' + JSON.stringify(item.img) + '); background-size:cover; background-position:center;"></div>';
+        iconHtml = '<div style="width:100%; height:46px; border-radius:8px; background-image:url(' + JSON.stringify(item.img) + '), linear-gradient(120deg, #1d1840, #2a2058); background-size:cover; background-position:center;"></div>';
       } else if(item.img || item.emoji){
         iconHtml = '<div class="shop-item-icon">' + avatarHtml(item) + '</div>';
       } else if(category === 'header'){
@@ -3789,7 +3833,7 @@
       var myHeaderItem = findItem('header', (prof.equipped || {}).header);
       if(prof.headerImageUrl){
         headerBannerEl.className = 'profile-header-banner';
-        headerBannerEl.style.backgroundImage = 'url(' + JSON.stringify(prof.headerImageUrl) + ')';
+        headerBannerEl.style.backgroundImage = 'url(' + JSON.stringify(prof.headerImageUrl) + '), linear-gradient(120deg, #1d1840, #2a2058)';
       } else {
         var myHeaderParts = headerBgParts(myHeaderItem);
         headerBannerEl.className = 'profile-header-banner' + myHeaderParts.cls;
@@ -3958,7 +4002,7 @@
     var topTags = Object.keys(tagCounts).sort(function(a, b){ return tagCounts[b] - tagCounts[a]; }).slice(0, 5);
     var bestTrackId = trackIds.slice().sort(function(a, b){ return (allLikes[b] || 0) - (allLikes[a] || 0); })[0];
     var bestTrack = bestTrackId ? communityTracks[bestTrackId] : null;
-    var pubHeaderParts = prof.headerImageUrl ? { cls: '', style: 'background-image:url(' + JSON.stringify(prof.headerImageUrl) + ');' } : headerBgParts(headerItem);
+    var pubHeaderParts = prof.headerImageUrl ? { cls: '', style: 'background-image:url(' + JSON.stringify(prof.headerImageUrl) + '), linear-gradient(120deg, #1d1840, #2a2058);' } : headerBgParts(headerItem);
 
     panel.innerHTML =
       '<div class="profile-banner-wrap">' +
@@ -4342,6 +4386,7 @@
     if(composerSequence.length < 2){ composerNoteText.textContent = '音符を2つ以上選んでください。'; return; }
     var melody = composerSequence.map(function(n){ return n.freq; });
     push(ref(db, 'tracks'), { title: title, artist: artist, uid: currentUser.uid, melody: melody, durationSeconds: duration, waveform: currentWaveform, stepTime: stepTime, tags: composerSelectedTags.slice(), createdAt: Date.now() });
+    awardPoints(currentUser.uid, SCORE_PER_TRACK);
     composerNoteText.textContent = '投稿しました！下のライブラリに表示されます。';
     composerTitleInput.value = '';
     composerSequence = [];
