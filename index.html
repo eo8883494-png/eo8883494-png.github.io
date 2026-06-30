@@ -1885,7 +1885,7 @@
     getDatabase, ref, set, remove, onValue, onChildAdded, onDisconnect, push, query, limitToLast, runTransaction, get
   } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
   import {
-    getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+    getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
   var firebaseConfig = {
@@ -1950,11 +1950,32 @@
   // ============== ログイン（Google） ==============
   // 配信・コメント・ショップ・曲投稿・リスナーの声は、ログインしている人だけが使えます。
   // （視聴・再生・閲覧はログインなしで誰でもできます）
-  document.getElementById('loginBtn').addEventListener('click', function(){
+  // ---------- 🔑 ログイン（アプリ内ブラウザ対策込み） ----------
+  // X/Instagram/LINEなどのアプリ内ブラウザではGoogleログインがブロックされるため、検出して案内します
+  function isInAppBrowser(){
+    var ua = navigator.userAgent || '';
+    return /Line\/|FBAN|FBAV|Instagram|Twitter|MicroMessenger/i.test(ua);
+  }
+  function startGoogleLogin(){
+    if(isInAppBrowser()){
+      showToast('このアプリ内のブラウザではGoogleログインがブロックされます。右上の「…」などから「ブラウザで開く」を選んでから、もう一度お試しください。', 'error');
+      return;
+    }
     signInWithPopup(auth, googleProvider).catch(function(err){
+      var code = err && err.code;
+      if(code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request'){
+        // ポップアップがブロックされた場合はリダイレクト方式にフォールバック
+        signInWithRedirect(auth, googleProvider).catch(function(err2){
+          showToast('ログインに失敗しました：' + (err2 && err2.message ? err2.message : err2), 'error');
+        });
+        return;
+      }
       showToast('ログインに失敗しました：' + (err && err.message ? err.message : err), 'error');
     });
-  });
+  }
+  getRedirectResult(auth).catch(function(){ /* リダイレクト未使用時は何も起きないので無視 */ });
+
+  document.getElementById('loginBtn').addEventListener('click', startGoogleLogin);
 
   // ---------- 🔔 通知（コメントをもらったら通知） ----------
   var notifUnsub = null;
@@ -2057,11 +2078,7 @@
       document.getElementById('logoutBtn').addEventListener('click', function(){ signOut(auth); });
     } else {
       box.innerHTML = '<button class="btn btn-primary" id="loginBtn" type="button">🔑 ログイン</button>';
-      document.getElementById('loginBtn').addEventListener('click', function(){
-        signInWithPopup(auth, googleProvider).catch(function(err){
-          showToast('ログインに失敗しました：' + (err && err.message ? err.message : err), 'error');
-        });
-      });
+      document.getElementById('loginBtn').addEventListener('click', startGoogleLogin);
     }
     refreshLockedNotes();
     if(typeof renderAdminPanel === 'function') renderAdminPanel();
