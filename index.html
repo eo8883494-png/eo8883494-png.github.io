@@ -3002,7 +3002,7 @@
     else { doSchedule(); }
   }
 
-
+  function scheduleMelody(id, notes, waveform, stepTime, octaveShift){
     var ctx = ensureMelodyCtx();
     stepTime = stepTime || 0.32;
     var octaveMul = Math.pow(2, octaveShift || 0);
