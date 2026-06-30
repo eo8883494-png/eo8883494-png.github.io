@@ -303,6 +303,17 @@
   .confirm-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
 
   .mood-tag-picker{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+
+  /* ---------- 楽曲ライブラリ：検索・並び替えツールバー ---------- */
+  .library-toolbar{
+    margin-top:24px; padding:18px 20px; background:var(--panel-2);
+    border:1px solid var(--line-strong); border-radius:12px;
+  }
+  .library-toolbar-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .library-toolbar-row + .library-toolbar-row{ margin-top:12px; }
+  .library-toolbar-row .mood-tag-picker{ margin-top:0; }
+  .library-filter-label{ font-family:var(--font-mono); font-size:0.74rem; color:var(--muted); flex-shrink:0; }
+  .library-result-count{ font-family:var(--font-mono); font-size:0.7rem; color:var(--muted-2); margin-top:12px; margin-bottom:0; }
   .mood-tag-btn{
     font-family:var(--font-mono); font-size:0.74rem; padding:8px 14px; border-radius:20px;
     border:1px solid var(--line-strong); background:var(--panel-2); color:var(--muted); transition:all .2s;
@@ -565,10 +576,14 @@
   .mini-eq span{ width:3px; background:rgba(237,234,226,0.55); animation:barSignal 1s ease-in-out infinite; animation-play-state:paused; }
   .mini-eq span:nth-child(2){ animation-delay:.15s; } .mini-eq span:nth-child(3){ animation-delay:.3s; }
   .track-card.playing .mini-eq span{ animation-play-state:running; background:var(--green); }
-  .track-name{ font-weight:700; font-size:0.96rem; }
+  .track-name{ font-weight:700; font-size:0.96rem; line-height:1.4; word-break:break-word; }
   .band-badge{
     font-family:var(--font-mono); font-size:0.6rem; color:var(--pink); border:1px solid rgba(255,61,127,0.4);
     background:rgba(255,61,127,0.1); border-radius:8px; padding:1px 6px; vertical-align:1px;
+  }
+  .official-badge{
+    font-family:var(--font-mono); font-size:0.6rem; color:var(--amber); border:1px solid rgba(255,178,62,0.4);
+    background:rgba(255,178,62,0.1); border-radius:8px; padding:1px 6px; vertical-align:1px;
   }
   .track-artist{ color:var(--muted); font-size:0.82rem; }
   .track-foot{ display:flex; align-items:center; gap:10px; margin-top:auto; flex-wrap:wrap; }
@@ -1241,17 +1256,23 @@
         <p class="audio-note" id="composerNote"></p>
       </div>
 
-      <div class="radio-control" style="border-top:none; padding-top:0; margin-top:24px;">
-        <input type="text" id="librarySearchInput" class="live-input" placeholder="🔍 曲名・アーティスト名で検索">
-        <select id="librarySortSelect" class="live-input" style="flex:0 0 160px;">
-          <option value="newest">新しい順</option>
-          <option value="oldest">古い順</option>
-          <option value="liked">いいねが多い順</option>
-          <option value="title">曲名順(あ→ん)</option>
-        </select>
+      <div class="library-toolbar">
+        <div class="library-toolbar-row">
+          <input type="text" id="librarySearchInput" class="live-input" placeholder="🔍 曲名・アーティスト名で検索">
+          <select id="librarySortSelect" class="live-input" style="flex:0 0 160px;">
+            <option value="newest">新しい順</option>
+            <option value="oldest">古い順</option>
+            <option value="liked">いいねが多い順</option>
+            <option value="title">曲名順(あ→ん)</option>
+          </select>
+        </div>
+        <div class="library-toolbar-row">
+          <span class="library-filter-label">🏷️ ムード：</span>
+          <div class="mood-tag-picker" id="libraryTagFilter"></div>
+        </div>
+        <p class="library-result-count" id="libraryResultCount"></p>
       </div>
-      <div class="mood-tag-picker" id="libraryTagFilter" style="margin-top:10px;"></div>
-      <div class="grid-3" id="trackLibraryGrid" style="margin-top:18px;"></div>
+      <div class="grid-3" id="trackLibraryGrid" style="margin-top:14px;"></div>
     </div>
   </section>
   </div>
@@ -2850,9 +2871,45 @@
   // ============== みんなの楽曲ライブラリ / 今夜のプレイリスト ==============
   // すべての曲は実在の音声ファイルではなく、その場で生成する音（メロディー）です。
   var HOUSE_TRACKS = {
-    t1: { title: '夜行性 ―眠らない街の合図―', artist: 'Night Owl Parade', melody: [220.00, 261.63, 329.63, 392.00], cover: 'c1' },
-    t2: { title: '雨上がりのモールス信号', artist: 'Static Letters', melody: [164.81, 196.00, 246.94, 293.66], cover: 'c2' },
-    t3: { title: 'おやすみシグナル', artist: '三日月レイ', melody: [174.61, 220.00, 261.63, 349.23], cover: 'c3' },
+    t1: {
+      title: '夜行性 ―眠らない街の合図―',
+      artist: 'Night Owl Parade',
+      cover: 'c1',
+      stepTime: 0.16,
+      durationSeconds: 100,
+      lanes: [
+        { type: 'melody', waveform: 'acoustic', octaveShift: 0, notes: [440.00, null, 523.25, null, 659.26, 523.25, 440.00, null, 349.23, null, 440.00, 523.25, null, 440.00, null, null, 523.25, null, 659.26, null, 392.00, 659.26, 523.25, null, 392.00, 493.88, 587.33, null, 493.88, 392.00, null, null] },
+        { type: 'chord', waveform: 'triangle', volume: 0.4, notes: [[440.00, 523.25, 659.26], null, null, null, [440.00, 523.25, 659.26], null, null, null, [349.23, 440.00, 523.25], null, null, null, [349.23, 440.00, 523.25], null, null, null, [261.63, 329.63, 392.00], null, null, null, [261.63, 329.63, 392.00], null, null, null, [392.00, 493.88, 587.33], null, null, null, [392.00, 493.88, 587.33], null, null, null] },
+        { type: 'bass', waveform: 'square', volume: 0.8, notes: [110.00, null, 110.00, null, 110.00, null, 110.00, null, 87.31, null, 87.31, null, 87.31, null, 87.31, null, 65.41, null, 65.41, null, 65.41, null, 65.41, null, 98.00, null, 98.00, null, 98.00, null, 98.00, null] },
+        { type: 'drums', volume: 0.9, notes: [['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null] }
+      ]
+    },
+    t2: {
+      title: '雨上がりのモールス信号',
+      artist: 'Static Letters',
+      cover: 'c2',
+      stepTime: 0.22,
+      durationSeconds: 100,
+      lanes: [
+        { type: 'melody', waveform: 'piano', octaveShift: 0, notes: [349.23, null, 440.00, null, 523.25, null, 440.00, null, 392.00, null, 493.88, null, 587.33, 493.88, null, null, 329.63, null, 392.00, null, 493.88, null, 392.00, null, 440.00, null, 523.25, 493.88, 440.00, null, null, null] },
+        { type: 'chord', waveform: 'triangle', volume: 0.4, notes: [[349.23, 440.00, 523.25, 659.26], null, null, null, [349.23, 440.00, 523.25, 659.26], null, null, null, [392.00, 493.88, 587.33], null, null, null, [392.00, 493.88, 587.33], null, null, null, [329.63, 392.00, 493.88, 587.33], null, null, null, [329.63, 392.00, 493.88, 587.33], null, null, null, [440.00, 523.25, 659.26, 783.99], null, null, null, [440.00, 523.25, 659.26, 783.99], null, null, null] },
+        { type: 'bass', waveform: 'sine', volume: 0.8, notes: [87.31, null, null, null, 87.31, null, null, null, 98.00, null, null, null, 98.00, null, null, null, 82.41, null, null, null, 82.41, null, null, null, 110.00, null, null, null, 110.00, null, null, null] },
+        { type: 'drums', volume: 0.85, notes: [['kick','hihat'], null, null, null, ['snare','hihat'], null, null, null, ['kick','hihat'], null, null, null, ['snare','hihat'], null, null, null, ['kick','hihat'], null, null, null, ['snare','hihat'], null, null, null, ['kick','hihat'], null, null, null, ['snare','hihat'], null, null, null] }
+      ]
+    },
+    t3: {
+      title: 'おやすみシグナル',
+      artist: '三日月レイ',
+      cover: 'c3',
+      stepTime: 0.34,
+      durationSeconds: 110,
+      lanes: [
+        { type: 'melody', waveform: 'violin', octaveShift: 0, notes: [440.00, null, null, 523.25, null, 659.26, null, null, 349.23, null, null, 440.00, null, 523.25, null, null, 523.25, null, null, 659.26, null, 392.00, null, null, 392.00, null, null, 493.88, null, 587.33, null, 493.88] },
+        { type: 'chord', waveform: 'triangle', volume: 0.35, notes: [[440.00, 523.25, 659.26, 783.99], null, null, null, null, null, null, null, [349.23, 440.00, 523.25, 659.26], null, null, null, null, null, null, null, [261.63, 329.63, 392.00, 493.88], null, null, null, null, null, null, null, [392.00, 493.88, 587.33, 659.26], null, null, null, null, null, null, null] },
+        { type: 'bass', waveform: 'sine', volume: 0.7, notes: [110.00, null, null, null, null, null, null, null, 87.31, null, null, null, null, null, null, null, 65.41, null, null, null, null, null, null, null, 98.00, null, null, null, null, null, null, null] },
+        { type: 'drums', volume: 0.6, notes: [['kick','hihat'], null, null, null, null, null, null, null, ['snare','hihat'], null, null, null, null, null, null, null, ['kick','hihat'], null, null, null, null, null, null, null, ['snare','hihat'], null, null, null, null, null, null, null] }
+      ]
+    },
     t4: {
       title: '夜が明けるまで',
       artist: '三日月レイ',
@@ -3374,6 +3431,12 @@
   function tempoLabel(stepTime){
     return TEMPO_LABELS[String(stepTime)] || 'ふつう';
   }
+  function formatDuration(seconds){
+    seconds = Math.round(seconds);
+    var m = Math.floor(seconds / 60);
+    var s = seconds % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
 
   // ---------- カードの生成・配線 ----------
   function trackCardHtml(id, t){
@@ -3384,7 +3447,10 @@
           '<div class="mini-eq"><span style="height:40%"></span><span style="height:90%"></span><span style="height:60%"></span></div>' +
         '</div>' +
         '<div>' +
-          '<p class="track-name">' + escapeHtml(t.title) + (t.lanes ? ' <span class="band-badge" title="複数パートで作られた曲です">🎸バンド</span>' : '') + '</p>' +
+          '<p class="track-name">' + escapeHtml(t.title) +
+            (t.lanes ? ' <span class="band-badge" title="複数パートで作られた曲です">🎸バンド</span>' : '') +
+            (!t.uid ? ' <span class="official-badge" title="zzZ FM公式トラック">⭐公式</span>' : '') +
+          '</p>' +
           '<p class="track-artist">' + decorateName(t.artist || '名無し', t.uid) + crownBadge(t.artist) + regularBadge(t.uid) +
             (t.uid && currentUser && currentUser.uid !== t.uid ?
               ' <button type="button" class="follow-inline-btn' + (isFollowing(t.uid) ? ' following' : '') + '" data-follow-uid="' + t.uid + '" data-follow-name="' + escapeHtml(t.artist || '名無し') + '">' + (isFollowing(t.uid) ? '✅フォロー中' : '➕フォロー') + '</button>'
@@ -3394,7 +3460,7 @@
         '</div>' +
         '<div class="track-foot">' +
           '<button class="play-btn" type="button" aria-label="試聴する">▶</button>' +
-          '<span class="track-time">♪ ' + (t.lanes ? (t.lanes.length + 'パート') : ((t.melody ? t.melody.length : 0) + '音')) + ' / ' + tempoLabel(t.stepTime) + (t.durationSeconds ? ' / ' + Math.round(t.durationSeconds) + '秒' : '') + '</span>' +
+          '<span class="track-time" title="' + (t.lanes ? (t.lanes.length + 'パート') : ((t.melody ? t.melody.length : 0) + '音')) + ' / ' + tempoLabel(t.stepTime) + '">' + (t.durationSeconds ? formatDuration(t.durationSeconds) : '') + '</span>' +
           '<button class="dl-btn" type="button" aria-label="ダウンロード">⬇</button>' +
           '<button class="dl-btn" type="button" aria-label="シェア" data-share-title="' + escapeHtml(t.title) + '" data-share-artist="' + escapeHtml(t.artist || '名無し') + '">🔗</button>' +
           (t.uid ? '<button class="dl-btn" type="button" aria-label="コメント" data-toggle-comments>💬<span class="comment-count-badge" id="commentCount-' + id + '"></span></button>' : '') +
@@ -3596,6 +3662,14 @@
     var entries = ids.map(function(id){ return { id: id, track: allTracks[id] }; });
     var emptyMsg = (query || libraryTagFilters.length) ? '一致する曲は見つかりませんでした。' : 'まだ投稿はありません。下のフォームから最初の1曲を作ってみませんか。';
     renderGrid(trackLibraryGrid, entries, emptyMsg, libraryUnsubs);
+
+    var countEl = document.getElementById('libraryResultCount');
+    if(countEl){
+      var totalCount = Object.keys(allTracks).length;
+      countEl.textContent = (query || libraryTagFilters.length)
+        ? entries.length + '曲が見つかりました（全' + totalCount + '曲中）'
+        : '全' + totalCount + '曲';
+    }
   }
 
   if(librarySearchInput) librarySearchInput.addEventListener('input', renderLibrary);
@@ -5045,41 +5119,79 @@
   // ---------- 🎲 曲名の自動生成 ----------
   var TITLE_WORD_BANK = {
     chill: {
-      prefix: ['真夜中の', '眠れない', '静かな', 'ひとりきりの', '誰もいない', '小さな', '遠くの'],
-      suffix: ['子守歌', '部屋', '街', '物語', 'ため息', '時間', '灯り', '余白']
+      prefix: [
+        '真夜中の', '眠れない', '静かな', 'ひとりきりの', '誰もいない', '小さな', '遠くの',
+        '深夜の', '気だるい', 'けだるい', 'まどろみの', '物憂げな', '無音の', '薄明の',
+        '窓辺の', '霧の中の', '微睡みの', '夜更けの', '淡い', '満ち欠けの'
+      ],
+      middle: ['', '', '', 'ひとりの', '帰り道の', '部屋の隅の', '窓の外の'],
+      suffix: [
+        '子守歌', '部屋', '街', '物語', 'ため息', '時間', '灯り', '余白',
+        'ノクターン', '夜想曲', 'まどろみ', '静寂', '残響', '雨だれ', '月明かり',
+        'シエスタ', '寝言', '休符', '余韻', '足音'
+      ]
     },
     pop: {
-      prefix: ['キミと', '夏色の', '弾ける', '新しい', '今夜だけの', '気まぐれな', 'まばゆい'],
-      suffix: ['メロディ', '一歩', '世界', '予感', 'リズム', 'ストーリー', '魔法']
+      prefix: [
+        'キミと', '夏色の', '弾ける', '新しい', '今夜だけの', '気まぐれな', 'まばゆい',
+        '駆け出す', '青春の', 'きらめく', '虹色の', '飛び跳ねる', '世界一の', '初恋の',
+        'はじまりの', '七色の', 'ハッピーな', '陽だまりの', '風まかせの', '恋する'
+      ],
+      middle: ['', '', '', '街角の', '放課後の', '寄り道の', '自由研究の'],
+      suffix: [
+        'メロディ', '一歩', '世界', '予感', 'リズム', 'ストーリー', '魔法',
+        'カケラ', 'パレード', 'シグナル', 'ステップ', 'タイムライン', 'シナリオ',
+        'ファンファーレ', 'スパーク', '冒険', 'カーニバル', 'プレイリスト'
+      ]
     },
     sad: {
-      prefix: ['さよならの', '届かない', '消えてゆく', '涙の', 'もう一度だけ', '色あせた', 'ひとりぼっちの'],
-      suffix: ['言葉', '声', '欠片', '夜', '手紙', '記憶', '雨音']
+      prefix: [
+        'さよならの', '届かない', '消えてゆく', '涙の', 'もう一度だけ', '色あせた', 'ひとりぼっちの',
+        '忘れられない', '取り残された', '凍りついた', '見えない', '誰にも言えない',
+        '宛先のない', '言えなかった', 'すれ違いの', '最後の', '名前のない', '空白の'
+      ],
+      middle: ['', '', '', 'あの日の', '思い出の', '別れ際の', '最後の夜の'],
+      suffix: [
+        '言葉', '声', '欠片', '夜', '手紙', '記憶', '雨音',
+        '涙', '影', '傷跡', '余白', '残り火', '迷子', 'エピローグ',
+        '裏側', '輪郭', '足跡', '結末'
+      ]
     },
     energetic: {
-      prefix: ['走り出せ', '燃え上がれ', '限界突破', '覚醒', '今すぐ', '誰よりも速く', '止まらない'],
-      suffix: ['ビート', '衝動', '信号', 'リズム', '鼓動', '一瞬', '閃光']
+      prefix: [
+        '走り出せ', '燃え上がれ', '限界突破', '覚醒', '今すぐ', '誰よりも速く', '止まらない',
+        '吹き荒れる', '爆発する', '雷鳴の', '加速する', '逆襲の', '反逆の', '無敵の',
+        '本気の', '真っ向勝負の', '咆哮する', '突き抜ける', '不屈の'
+      ],
+      middle: ['', '', '', '深夜の', '最終ラウンドの', '一発勝負の', '崖っぷちの'],
+      suffix: [
+        'ビート', '衝動', '信号', 'リズム', '鼓動', '一瞬', '閃光',
+        'スパーク', 'カウントダウン', '雄叫び', '爆音', 'スピード', '号砲',
+        '覚醒', 'バトル', '一撃', 'クライマックス'
+      ]
     }
   };
-  var TITLE_GENERIC_PREFIX = ['夜の', '眠れない夜の', 'いつかの', 'まだ見ぬ'];
-  var TITLE_GENERIC_SUFFIX = ['周波数', 'メロディ', '一曲', '物語', 'ラジオ'];
+  var TITLE_GENERIC_PREFIX = ['夜の', '眠れない夜の', 'いつかの', 'まだ見ぬ', '名もなき', '誰かの'];
+  var TITLE_GENERIC_SUFFIX = ['周波数', 'メロディ', '一曲', '物語', 'ラジオ', '電波'];
 
   function generateSongTitle(mood){
     var bank = TITLE_WORD_BANK[mood];
     var prefixPool = bank ? bank.prefix : TITLE_GENERIC_PREFIX;
+    var middlePool = bank ? bank.middle : [''];
     var suffixPool = bank ? bank.suffix : TITLE_GENERIC_SUFFIX;
-    return pickRandom(prefixPool) + pickRandom(suffixPool);
+    return pickRandom(prefixPool) + pickRandom(middlePool) + pickRandom(suffixPool);
   }
 
-  // 直前と同じ曲名を続けて引かないようにする
-  var lastGeneratedTitle = null;
+  // 直近に出した曲名は避けて、似たものがすぐ連続で出ないようにする
+  var recentGeneratedTitles = [];
   function generateSongTitleFresh(mood){
     var title;
-    for(var i = 0; i < 6; i++){
+    for(var i = 0; i < 20; i++){
       title = generateSongTitle(mood);
-      if(title !== lastGeneratedTitle) break;
+      if(recentGeneratedTitles.indexOf(title) === -1) break;
     }
-    lastGeneratedTitle = title;
+    recentGeneratedTitles.push(title);
+    if(recentGeneratedTitles.length > 12) recentGeneratedTitles.shift();
     return title;
   }
 
