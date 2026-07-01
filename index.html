@@ -2436,7 +2436,19 @@
   onAuthStateChanged(auth, function(user){
     var justLoggedIn = !currentUser && user;
     currentUser = user;
-    updateAuthUI();
+    try {
+      updateAuthUI();
+    } catch(e) {
+      // 画面更新のどこかで問題が起きても、ログインボタンの配線だけは必ず生かしておく（全損防止の保険）
+      console.error('updateAuthUI error:', e);
+      try {
+        var box = document.getElementById('authBox');
+        if(box && !currentUser){
+          box.innerHTML = '<button class="btn btn-primary" id="loginBtn" type="button">🔑 ログイン</button>';
+          document.getElementById('loginBtn').addEventListener('click', startGoogleLogin);
+        }
+      } catch(e2) {}
+    }
     if(justLoggedIn) handleReferral(user.uid);
   });
 
@@ -5557,6 +5569,53 @@
 
   // コード進行 ＋ 曲の構成（イントロ→Aメロ→サビ…）から、メロディ・コード・ベース・ドラムを
   // まとめて1曲分に組み立てる（applyChordTemplateの発展版：短いループではなく展開のある1曲になる）
+  // ---------- 🎵 モチーフ（曲の「顔」になる短いフレーズ）の生成 ----------
+  // 実際の曲は「同じフレーズの繰り返しと少しの変形」でできています。毎ステップばらばらのランダムではなく、
+  // 1小節分のリズム型と音の動き(輪郭)を最初に決めて、それをセクション中で使い回すことで「歌える」メロディにします。
+  function generateMotif(density){
+    var rhythm = [];
+    for(var i = 0; i < STEPS_PER_CHORD; i++){
+      var p = (i === 0) ? 0.95 : (i === 4) ? 0.8 : (i % 2 === 0) ? density : density * 0.55;
+      rhythm.push(Math.random() < p);
+    }
+    // 輪郭：音の高さの動き。隣の音への移動を優先して、跳びすぎない歌いやすい形にする
+    var contour = [];
+    var cur = Math.floor(Math.random() * 3);
+    for(var j = 0; j < STEPS_PER_CHORD; j++){
+      contour.push(cur);
+      var move = pickRandom([-1, -1, 0, 1, 1, 2, -2]);
+      cur = Math.max(0, Math.min(4, cur + move));
+    }
+    return { rhythm: rhythm, contour: contour };
+  }
+  // 語尾だけ変えたバリエーション（A→A'）。「同じだけど少し違う」が曲らしさを生みます
+  function motifVariation(motif){
+    var v = { rhythm: motif.rhythm.slice(), contour: motif.contour.slice() };
+    for(var i = STEPS_PER_CHORD - 2; i < STEPS_PER_CHORD; i++){
+      if(Math.random() < 0.7) v.contour[i] = Math.max(0, Math.min(4, v.contour[i] + pickRandom([-1, 1, 2])));
+    }
+    return v;
+  }
+  // リズムを間引いた静かなバージョン（イントロ・アウトロ用：サビの面影をうっすら残す）
+  function motifThin(motif, keepRatio){
+    var v = { rhythm: motif.rhythm.map(function(on, i){ return on && (i % 4 === 0 || Math.random() < keepRatio); }), contour: motif.contour.slice() };
+    return v;
+  }
+  // モチーフを「そのコードの構成音」に当てはめて、1小節分の音符にする
+  function renderMotifBar(motif, chordToneFreqs, passingFreq, contourLift){
+    var out = [];
+    var pool = chordToneFreqs.concat([passingFreq]);
+    for(var i = 0; i < STEPS_PER_CHORD; i++){
+      if(motif.rhythm[i]){
+        var idx = Math.min(Math.max(0, motif.contour[i] + (contourLift || 0)), pool.length - 1);
+        out.push({ freq: pool[idx], label: '♪' });
+      } else {
+        out.push({ freq: 0, label: '♪―' });
+      }
+    }
+    return out;
+  }
+
   function buildStructuredSong(tpl, structureId, transposeSemitones, opts){
     var structure = SONG_STRUCTURES.filter(function(s){ return s.id === structureId; })[0];
     if(!structure) return null;
@@ -5565,6 +5624,17 @@
     var transposeMul = Math.pow(2, transposeSemitones / 12);
     var verseVariant = opts.verseVariant != null ? opts.verseVariant : 0;
     var chorusVariant = opts.chorusVariant != null ? opts.chorusVariant : 1;
+
+    // この曲専用のモチーフを用意（Aメロ用・Bメロ用・サビ用。イントロ/アウトロはサビの薄いバージョン）
+    var motifs = {
+      verse: generateMotif(SECTION_SPECS.verse.melodyDensity),
+      prechorus: generateMotif(SECTION_SPECS.prechorus.melodyDensity),
+      chorus: generateMotif(SECTION_SPECS.chorus.melodyDensity)
+    };
+    motifs.verseVar = motifVariation(motifs.verse);
+    motifs.chorusVar = motifVariation(motifs.chorus);
+    motifs.intro = motifThin(motifs.chorus, 0.25);
+    motifs.outro = motifThin(motifs.chorus, 0.15);
 
     var newChordSeq = [];
     var newBassSeq = [];
@@ -5576,36 +5646,48 @@
       var spec = SECTION_SPECS[sectionId];
       if(!spec) return;
       var sectionDrumVariant = (sectionId === 'chorus' || sectionId === 'prechorus') ? chorusVariant : verseVariant;
+      var isChorus = (sectionId === 'chorus');
       for(var b = 0; b < spec.bars; b++){
         var c = tpl.chords[chordCursor % tpl.chords.length];
         chordCursor++;
 
+        // コード伴奏：サビは刻み（0,2,4,6）で勢いを、その他は0,4で落ち着きを
         var chordFreqsArr = chordFreqs(c.root, c.type, 4).map(function(f){ return f * transposeMul; });
         var chordLbl = chordLabel(c.root, c.type);
         for(var i = 0; i < STEPS_PER_CHORD; i++){
-          if(i === 0 || i === 4){ newChordSeq.push({ freq: chordFreqsArr, label: chordLbl }); }
+          var strum = isChorus ? (i % 2 === 0) : (i === 0 || i === 4);
+          if(strum && spec.melodyDensity > 0.18){ newChordSeq.push({ freq: chordFreqsArr, label: chordLbl }); }
+          else if(i === 0){ newChordSeq.push({ freq: chordFreqsArr, label: chordLbl }); }
           else { newChordSeq.push({ freq: 0, label: '♪―' }); }
         }
 
+        // ベース：サビは8分でルート＋5度を織り交ぜて跳ねさせ、その他はルートをどっしり
         var rootFreq = freqFromMidi(midiForNote(c.root, 2)) * transposeMul;
+        var fifthFreq = freqFromMidi(midiForNote(c.root, 2) + 7) * transposeMul;
         for(var i = 0; i < STEPS_PER_CHORD; i++){
-          if(i === 0 || i === 4){ newBassSeq.push({ freq: rootFreq, label: c.root }); }
-          else { newBassSeq.push({ freq: 0, label: '♪―' }); }
+          if(isChorus){
+            if(i % 2 === 0){ newBassSeq.push({ freq: rootFreq, label: c.root }); }
+            else if(i === 3 || i === 7){ newBassSeq.push({ freq: fifthFreq, label: c.root + '5' }); }
+            else { newBassSeq.push({ freq: 0, label: '♪―' }); }
+          } else {
+            if(i === 0 || i === 4){ newBassSeq.push({ freq: rootFreq, label: c.root }); }
+            else { newBassSeq.push({ freq: 0, label: '♪―' }); }
+          }
         }
 
+        // メロディ：セクションのモチーフを使い回す（偶数小節はバリエーションで「A→A'」の呼吸を作る）
         var melodyOctave = spec.octaveBoost ? 6 : 5;
         var tones = chordFreqs(c.root, c.type, melodyOctave).map(function(f){ return f * transposeMul; });
         var passing = freqFromMidi(midiForNote(c.root, melodyOctave) + 2) * transposeMul;
-        var toneChoices = tones.concat([passing]);
-        for(var i = 0; i < STEPS_PER_CHORD; i++){
-          var place = Math.random() < spec.melodyDensity;
-          if(place){
-            var tone = toneChoices[Math.floor(Math.random() * toneChoices.length)];
-            newMelody.push({ freq: tone, label: '♪' });
-          } else {
-            newMelody.push({ freq: 0, label: '♪―' });
-          }
-        }
+        var motif;
+        if(sectionId === 'intro'){ motif = motifs.intro; }
+        else if(sectionId === 'outro'){ motif = motifs.outro; }
+        else if(sectionId === 'verse'){ motif = (b % 2 === 1) ? motifs.verseVar : motifs.verse; }
+        else if(sectionId === 'chorus'){ motif = (b % 2 === 1) ? motifs.chorusVar : motifs.chorus; }
+        else { motif = motifs.prechorus; }
+        var contourLift = (sectionId === 'prechorus' && b === spec.bars - 1) ? 1 : 0; // Bメロ最後はサビへ向けて少し上げる
+        var barNotes = renderMotifBar(motif, tones, passing, contourLift);
+        for(var i = 0; i < barNotes.length; i++){ newMelody.push(barNotes[i]); }
 
         barPlan.push({ drums: spec.drums, drumVariant: sectionDrumVariant, crashStart: !!(spec.crashStart && b === 0) });
       }
