@@ -1185,7 +1185,11 @@
             <button type="button" class="wave-btn" data-wave="piano">🎹 ピアノ</button>
             <button type="button" class="wave-btn" data-wave="trumpet">🎺 トランペット</button>
             <button type="button" class="wave-btn" data-wave="violin">🎻 バイオリン</button>
+            <button type="button" class="wave-btn" data-wave="vocal_a">🎤 ボイス(あ)</button>
+            <button type="button" class="wave-btn" data-wave="vocal_i">🎤 ボイス(い)</button>
+            <button type="button" class="wave-btn" data-wave="vocal_u">🎤 ボイス(う)</button>
           </div>
+          <p class="audio-note" style="margin-top:-4px;">🎤 ボイスは録音ではなく、フィルターで「声っぽさ」を作った合成音です。歌詞は歌えませんが、ボーカルラインの雰囲気づけに使えます。</p>
 
           <div class="mode-tabs" id="modeTabs">
             <button type="button" class="mode-tab active" data-mode="easy">かんたんモード</button>
@@ -3147,6 +3151,56 @@
     return { source: src, gain: g };
   }
 
+  // ---------- 🎤 ボイス（ボカロ風シンセ：本物の録音ではなく、フォルマント・フィルターで「声っぽさ」を作ります） ----------
+  // 母音ごとのおおよそのフォルマント周波数（F1・F2・F3）。人の声道の共鳴を簡易的に再現します。
+  var VOCAL_FORMANTS = {
+    vocal_a: { formants: [700, 1220, 2600], label: '🎤 ボイス(あ)' },
+    vocal_i: { formants: [270, 2290, 3010], label: '🎤 ボイス(い)' },
+    vocal_u: { formants: [300, 870, 2240],  label: '🎤 ボイス(う)' }
+  };
+  function isVocalWaveform(waveform){ return !!VOCAL_FORMANTS[waveform]; }
+
+  function playVocalNote(ctx, destination, waveform, freq, startTime, duration, levelScale){
+    var info = VOCAL_FORMANTS[waveform] || VOCAL_FORMANTS.vocal_a;
+    var osc = ctx.createOscillator();
+    osc.type = 'sawtooth'; // 倍音が豊富で、フォルマント成形の元波形に向いている
+    osc.frequency.setValueAtTime(freq, startTime);
+
+    // 声らしさを出すための、ごく軽いビブラート
+    var vibrato = ctx.createOscillator();
+    vibrato.frequency.value = 5.5;
+    var vibratoGain = ctx.createGain();
+    vibratoGain.gain.value = freq * 0.012;
+    vibrato.connect(vibratoGain).connect(osc.frequency);
+    vibrato.start(startTime);
+    vibrato.stop(startTime + duration + 0.05);
+
+    var oscGain = ctx.createGain();
+    oscGain.gain.setValueAtTime(0.0001, startTime);
+    oscGain.gain.exponentialRampToValueAtTime(0.9, startTime + 0.03);
+    oscGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+    osc.connect(oscGain);
+
+    var outGain = ctx.createGain();
+    outGain.gain.value = 0.55 * (levelScale || 1);
+
+    // 3つのバンドパスフィルター（フォルマント）を並列にかけて、母音らしい響きに整える
+    info.formants.forEach(function(fFreq, idx){
+      var bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = fFreq;
+      bp.Q.value = 9;
+      var fGain = ctx.createGain();
+      fGain.gain.value = idx === 0 ? 1 : (idx === 1 ? 0.55 : 0.3);
+      oscGain.connect(bp).connect(fGain).connect(outGain);
+    });
+    outGain.connect(destination);
+
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.05);
+    return { source: osc, gain: outGain };
+  }
+
   // 旧コードとの互換のため、'acoustic' 専用の名前でも呼べるようにしておきます
   function loadGuitarBuffer(ctx){ return loadSampleBuffer(ctx, 'acoustic'); }
   function playAcousticNoteSample(ctx, destination, freq, startTime, levelScale){
@@ -3326,12 +3380,18 @@
           var levelScale = 1 / Math.sqrt(freqs.length);
           var waveform = lane.waveform || 'sine';
           var isSample = isSampleWaveform(waveform);
+          var isVocal = isVocalWaveform(waveform);
           freqs.forEach(function(rawFreq, fi){
             var freq = rawFreq * octaveMul;
-            var noteTime = isSample ? t + fi * 0.014 : t;
+            var noteTime = (isSample || isVocal) ? t + fi * 0.014 : t;
             if(isSample){
               var node = playSampleNote(ctx, masterBus, waveform, freq, noteTime, levelScale * laneVolume);
               if(node) activeNodes.push(node);
+              return;
+            }
+            if(isVocal){
+              var vnode = playVocalNote(ctx, masterBus, waveform, freq, noteTime, stepTime, levelScale * laneVolume);
+              if(vnode) activeNodes.push(vnode);
               return;
             }
             var o = ctx.createOscillator(); o.type = waveform; o.frequency.value = freq;
@@ -3363,6 +3423,7 @@
     stepTime = stepTime || 0.32;
     var octaveMul = Math.pow(2, octaveShift || 0);
     var isSample = isSampleWaveform(waveform);
+    var isVocal = isVocalWaveform(waveform);
     var masterBus = buildEffectChain(ctx, ctx.destination, effects);
 
     function doSchedule(){
@@ -3375,10 +3436,15 @@
         var levelScale = 1 / Math.sqrt(freqs.length);
         freqs.forEach(function(rawFreq, fi){
           var freq = rawFreq * octaveMul;
-          var noteTime = isSample ? t + fi * 0.014 : t; // コードはわずかにストロークをずらす
+          var noteTime = (isSample || isVocal) ? t + fi * 0.014 : t; // コードはわずかにストロークをずらす
           if(isSample){
             var node = playSampleNote(ctx, masterBus, waveform, freq, noteTime, levelScale);
             if(node) activeNodes.push(node);
+            return;
+          }
+          if(isVocal){
+            var vnode = playVocalNote(ctx, masterBus, waveform, freq, noteTime, stepTime, levelScale);
+            if(vnode) activeNodes.push(vnode);
             return;
           }
           var o = ctx.createOscillator(); o.type = waveform || 'sine'; o.frequency.value = freq;
@@ -3486,11 +3552,16 @@
             var freqs = Array.isArray(step) ? step : [step];
             var levelScale = 1 / Math.sqrt(freqs.length);
             var isSample = isSampleWaveform(waveform);
+            var isVocal = isVocalWaveform(waveform);
             freqs.forEach(function(rawFreq, fi){
               var freq = rawFreq * octaveMul;
-              var noteTime = isSample ? noteStart + fi * 0.014 : noteStart;
+              var noteTime = (isSample || isVocal) ? noteStart + fi * 0.014 : noteStart;
               if(isSample){
                 playSampleNote(offlineCtx, masterBus, waveform, freq, noteTime, levelScale * laneVolume);
+                return;
+              }
+              if(isVocal){
+                playVocalNote(offlineCtx, masterBus, waveform, freq, noteTime, stepTime, levelScale * laneVolume);
                 return;
               }
               var o = offlineCtx.createOscillator(); o.type = waveform; o.frequency.value = freq;
@@ -5422,10 +5493,10 @@
   var autoMood = 'chill';
   // それぞれの雰囲気で「合いそうな候補」を複数用意し、押すたびにランダムに選ぶことで毎回違う仕上がりにします
   var MOOD_PRESETS = {
-    chill:     { templateIds: ['jazzy', 'sad'],          waveforms: ['triangle', 'sine', 'piano', 'violin'],        tempos: ['0.32', '0.45'], density: 0.5 },
-    pop:       { templateIds: ['circle', 'canon'],       waveforms: ['square', 'triangle', 'piano', 'acoustic'],    tempos: ['0.2', '0.32'],  density: 0.65 },
-    sad:       { templateIds: ['sad', 'jazzy'],          waveforms: ['sine', 'triangle', 'violin', 'piano'],        tempos: ['0.45', '0.32'], density: 0.4 },
-    energetic: { templateIds: ['komuro', 'circle'],      waveforms: ['sawtooth', 'square', 'trumpet', 'acoustic'],  tempos: ['0.12', '0.2'],  density: 0.75 }
+    chill:     { templateIds: ['jazzy', 'sad'],          waveforms: ['triangle', 'sine', 'piano', 'violin', 'vocal_a'],  tempos: ['0.32', '0.45'], density: 0.5 },
+    pop:       { templateIds: ['circle', 'canon'],       waveforms: ['square', 'triangle', 'piano', 'acoustic'],         tempos: ['0.2', '0.32'],  density: 0.65 },
+    sad:       { templateIds: ['sad', 'jazzy'],          waveforms: ['sine', 'triangle', 'violin', 'piano', 'vocal_a'],  tempos: ['0.45', '0.32'], density: 0.4 },
+    energetic: { templateIds: ['komuro', 'circle'],      waveforms: ['sawtooth', 'square', 'trumpet', 'acoustic'],       tempos: ['0.12', '0.2'],  density: 0.75 }
   };
   function pickRandom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
