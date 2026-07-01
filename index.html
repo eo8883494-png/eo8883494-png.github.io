@@ -3480,6 +3480,7 @@
 
   // ---------- カードの生成・配線 ----------
   function trackCardHtml(id, t){
+    var isHouseTrack = !!HOUSE_TRACKS[id]; // 固定の公式トラック（t1〜t4。Firebase上には存在しないので削除対象外）
     return (
       '<article class="track-card" data-track="' + id + '">' +
         '<div class="cover ' + (t.cover || coverFor(id)) + '">' +
@@ -3489,7 +3490,7 @@
         '<div>' +
           '<p class="track-name">' + escapeHtml(t.title) +
             (t.lanes ? ' <span class="band-badge" title="複数パートで作られた曲です">🎸バンド</span>' : '') +
-            (!t.uid ? ' <span class="official-badge" title="zzZ FM公式トラック">⭐公式</span>' : '') +
+            (isHouseTrack ? ' <span class="official-badge" title="zzZ FM公式トラック">⭐公式</span>' : '') +
           '</p>' +
           '<p class="track-artist">' + decorateName(t.artist || '名無し', t.uid) + crownBadge(t.artist) + regularBadge(t.uid) +
             (t.uid && currentUser && currentUser.uid !== t.uid ?
@@ -3504,10 +3505,10 @@
           '<button class="dl-btn" type="button" aria-label="ダウンロード">⬇</button>' +
           '<button class="dl-btn" type="button" aria-label="シェア" data-share-title="' + escapeHtml(t.title) + '" data-share-artist="' + escapeHtml(t.artist || '名無し') + '">🔗</button>' +
           (t.uid ? '<button class="dl-btn" type="button" aria-label="コメント" data-toggle-comments>💬<span class="comment-count-badge" id="commentCount-' + id + '"></span></button>' : '') +
-          (t.uid && currentUser && (isAdmin() || currentUser.uid === t.uid) ?
+          (!isHouseTrack && currentUser && (isAdmin() || currentUser.uid === t.uid) ?
             '<button class="dl-btn' + (isAdmin() && currentUser.uid !== t.uid ? ' admin-only-btn' : '') + '" type="button" data-delete-track="' + id + '" title="削除">🗑️</button>'
             : '') +
-          (isAdmin() && t.uid && (!currentUser || currentUser.uid !== t.uid) ?
+          (isAdmin() && !isHouseTrack && t.uid && (!currentUser || currentUser.uid !== t.uid) ?
             '<button class="dl-btn admin-only-btn" type="button" data-admin-ban="' + t.uid + '" data-admin-ban-name="' + escapeHtml(t.artist || '名無し') + '" title="投稿者をBAN">🚫</button>'
             : '') +
           '<button class="heart-btn" data-track="' + id + '">' +
