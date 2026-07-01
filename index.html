@@ -636,6 +636,24 @@
   .wave-btn.active{ color:var(--pink); border-color:rgba(255,61,127,0.5); background:rgba(255,61,127,0.08); }
 
   .chord-picker{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+
+  /* ---------- 作曲フォーム：ステップカード ---------- */
+  .composer-step{
+    padding:20px 22px; margin-bottom:20px; border:1px solid var(--line-strong); border-radius:14px;
+    background:var(--panel-2);
+  }
+  .composer-step-head{ display:flex; align-items:flex-start; gap:12px; margin-bottom:16px; }
+  .composer-step-num{
+    flex-shrink:0; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-mono); font-size:0.82rem; font-weight:700; color:var(--green);
+    border:1px solid rgba(61,255,160,0.4); background:rgba(61,255,160,0.08);
+  }
+  .composer-step-head h3{ font-size:1rem; margin:0 0 3px; }
+  .composer-step-head p{ font-size:0.82rem; color:var(--muted); margin:0; }
+  .composer-step-auto{
+    border-color:rgba(255,178,62,0.4); background:linear-gradient(180deg, rgba(255,178,62,0.06), var(--panel-2) 60%);
+  }
+  .composer-step-auto .composer-step-num{ color:var(--amber); border-color:rgba(255,178,62,0.4); background:rgba(255,178,62,0.1); }
   .chord-template-picker{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
   .chord-template-card{
     display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
@@ -1097,163 +1115,190 @@
           <span class="snippet-eyebrow">🎯 今日のテーマ</span>
           <span class="daily-theme-text" id="dailyThemeText"></span>
         </div>
-        <div class="radio-control" style="border-top:none; padding-top:0;">
-          <input type="text" id="composerTitle" class="live-input" placeholder="曲名" maxlength="30">
-          <button type="button" class="btn" id="suggestTitleBtn" style="flex:0 0 auto;">🎲 曲名を考える</button>
-          <input type="text" id="composerArtist" class="live-input" placeholder="アーティスト名(ラジオネーム)" maxlength="20">
-          <select id="composerDuration" class="live-input" style="flex:0 0 110px;">
-            <option value="10">10秒</option>
-            <option value="30">30秒</option>
-            <option value="60">1分</option>
-            <option value="180">3分</option>
-          </select>
-          <select id="composerTempo" class="live-input" style="flex:0 0 110px;">
-            <option value="0.45">遅い</option>
-            <option value="0.32" selected>ふつう</option>
-            <option value="0.2">速い</option>
-            <option value="0.12">とても速い</option>
-          </select>
-          <select id="composerOctave" class="live-input" style="flex:0 0 110px;">
-            <option value="-2">-2オクターブ</option>
-            <option value="-1" selected>-1オクターブ</option>
-            <option value="0">そのまま</option>
-            <option value="1">+1オクターブ</option>
-            <option value="2">+2オクターブ</option>
-          </select>
-        </div>
-        <p class="broadcast-desc">作ったフレーズを選んだ長さになるまで繰り返して、1曲分にします。</p>
-        <p class="broadcast-desc">オクターブは「次に置く音符」に効きます。途中で変えれば、その場面だけ高く/低くできます。</p>
-
-        <div class="wave-picker" id="wavePicker">
-          <button type="button" class="wave-btn active" data-wave="sine">サイン(まる)</button>
-          <button type="button" class="wave-btn" data-wave="triangle">トライアングル</button>
-          <button type="button" class="wave-btn" data-wave="square">スクエア(角)</button>
-          <button type="button" class="wave-btn" data-wave="sawtooth">ソウ(鋭い)</button>
-          <button type="button" class="wave-btn" data-wave="acoustic">🎸 アコギ</button>
-          <button type="button" class="wave-btn" data-wave="piano">🎹 ピアノ</button>
-          <button type="button" class="wave-btn" data-wave="trumpet">🎺 トランペット</button>
-          <button type="button" class="wave-btn" data-wave="violin">🎻 バイオリン</button>
-        </div>
-
-        <p class="broadcast-desc" style="margin-top:-4px;">🎸 コードも使えます（タップで1ストロークぶん追加）</p>
-        <div class="chord-picker" id="chordPicker">
-          <button type="button" class="chord-btn" data-notes="261.63,329.63,392.00">C</button>
-          <button type="button" class="chord-btn" data-notes="196.00,246.94,293.66">G</button>
-          <button type="button" class="chord-btn" data-notes="220.00,261.63,329.63">Am</button>
-          <button type="button" class="chord-btn" data-notes="174.61,220.00,261.63">F</button>
-          <button type="button" class="chord-btn" data-notes="164.81,196.00,246.94">Em</button>
-          <button type="button" class="chord-btn" data-notes="293.66,369.99,440.00">D</button>
-        </div>
-
-        <div class="mode-tabs" id="modeTabs">
-          <button type="button" class="mode-tab active" data-mode="easy">かんたんモード</button>
-          <button type="button" class="mode-tab" data-mode="pro">玄人モード</button>
-        </div>
-
-        <div class="composer-mode" id="easyMode">
-          <div class="note-picker" id="notePicker">
-            <button type="button" class="note-btn" data-freq="261.63">ド</button>
-            <button type="button" class="note-btn" data-freq="293.66">レ</button>
-            <button type="button" class="note-btn" data-freq="329.63">ミ</button>
-            <button type="button" class="note-btn" data-freq="349.23">ファ</button>
-            <button type="button" class="note-btn" data-freq="392.00">ソ</button>
-            <button type="button" class="note-btn" data-freq="440.00">ラ</button>
-            <button type="button" class="note-btn" data-freq="493.88">シ</button>
-            <button type="button" class="note-btn" data-freq="523.25">ド(高)</button>
+        <div class="composer-step">
+          <div class="composer-step-head">
+            <span class="composer-step-num">1</span>
+            <div><h3>曲の基本情報</h3><p>曲名・アーティスト名・長さ・テンポを決めます。</p></div>
           </div>
-        </div>
-
-        <div class="composer-mode" id="proMode" style="display:none;">
-          <p class="broadcast-desc" style="margin-top:0;">2オクターブのキーボードで一音ずつ作れます。半音や休符も使えます。</p>
-          <div class="piano-row" id="pianoRow"></div>
-          <div class="composer-actions" style="margin-top:10px;">
-            <button type="button" class="btn" id="restBtn">♪― 休符を入れる</button>
-            <button type="button" class="btn" id="chordModeToggle">🎶 コードを組む(オフ)</button>
-            <button type="button" class="btn btn-primary" id="commitChordBtn" style="display:none;">この組み合わせを追加</button>
-            <button type="button" class="btn" id="clearChordBtn" style="display:none;">選択をクリア</button>
+          <div class="radio-control" style="border-top:none; padding-top:0;">
+            <input type="text" id="composerTitle" class="live-input" placeholder="曲名" maxlength="30">
+            <button type="button" class="btn" id="suggestTitleBtn" style="flex:0 0 auto;">🎲 曲名を考える</button>
+            <input type="text" id="composerArtist" class="live-input" placeholder="アーティスト名(ラジオネーム)" maxlength="20">
+            <select id="composerDuration" class="live-input" style="flex:0 0 110px;">
+              <option value="10">10秒</option>
+              <option value="30">30秒</option>
+              <option value="60">1分</option>
+              <option value="180">3分</option>
+            </select>
+            <select id="composerTempo" class="live-input" style="flex:0 0 110px;">
+              <option value="0.45">遅い</option>
+              <option value="0.32" selected>ふつう</option>
+              <option value="0.2">速い</option>
+              <option value="0.12">とても速い</option>
+            </select>
+            <select id="composerOctave" class="live-input" style="flex:0 0 110px;">
+              <option value="-2">-2オクターブ</option>
+              <option value="-1" selected>-1オクターブ</option>
+              <option value="0">そのまま</option>
+              <option value="1">+1オクターブ</option>
+              <option value="2">+2オクターブ</option>
+            </select>
           </div>
-          <p class="audio-note">コードを組む：オンにしてからキーを複数タップ(例:B,D#,F#でB)→「追加」。Bのような細かいコードも自由に作れます。</p>
+          <p class="broadcast-desc">作ったフレーズを選んだ長さになるまで繰り返して、1曲分にします。</p>
         </div>
 
-        <div class="note-seq" id="noteSeq"><span class="note-seq-empty">音符をタップして、メロディーを作ってみましょう（2〜32音）</span></div>
-
-        <hr class="divider">
-
-        <p class="snippet-eyebrow">🎼 コード進行テンプレ</p>
-        <p class="broadcast-desc" style="margin-top:0;">よく使われる進行を選ぶと、ベース・コード・簡単なドラムが自動で組まれます（バンド編成が自動でONになります）。</p>
-        <div class="chord-template-picker" id="chordTemplatePicker"></div>
-
-        <p class="snippet-eyebrow" style="margin-top:20px;">🎲 おまかせ作曲</p>
-        <p class="broadcast-desc" style="margin-top:0;">雰囲気を選んでボタンを押すと、メロディ・ベース・コード・ドラムをまとめて自動で作ります。気に入らなければ何度でも作り直せます。</p>
-        <div class="wave-picker" id="autoMoodPicker">
-          <button type="button" class="wave-btn active" data-mood="chill">😌 落ち着く</button>
-          <button type="button" class="wave-btn" data-mood="pop">😊 ポップ</button>
-          <button type="button" class="wave-btn" data-mood="sad">😢 切ない</button>
-          <button type="button" class="wave-btn" data-mood="energetic">🔥 アガる</button>
-        </div>
-        <div class="composer-actions">
-          <button type="button" class="btn btn-primary" id="autoComposeBtn">🎲 おまかせで作ってみる</button>
+        <div class="composer-step composer-step-auto">
+          <div class="composer-step-head">
+            <span class="composer-step-num">🎲</span>
+            <div><h3>おまかせで作ってみる</h3><p>迷ったらコレ。雰囲気を選んでボタンを押すだけで、メロディ・ベース・コード・ドラムを一気に自動生成します。</p></div>
+          </div>
+          <div class="wave-picker" id="autoMoodPicker">
+            <button type="button" class="wave-btn active" data-mood="chill">😌 落ち着く</button>
+            <button type="button" class="wave-btn" data-mood="pop">😊 ポップ</button>
+            <button type="button" class="wave-btn" data-mood="sad">😢 切ない</button>
+            <button type="button" class="wave-btn" data-mood="energetic">🔥 アガる</button>
+          </div>
+          <div class="composer-actions">
+            <button type="button" class="btn btn-primary" id="autoComposeBtn">🎲 おまかせで作ってみる</button>
+          </div>
+          <p class="audio-note">気に入らなければ、何度でも押し直せます。</p>
         </div>
 
-        <div class="band-toggle-row" style="margin-top:18px;">
-          <button type="button" class="btn btn-primary" id="bandModeToggle">🎸 バンド編成にする（ベース・ドラムを追加）</button>
-        </div>
-
-        <div id="bandModeSection" style="display:none; margin-top:14px;">
-          <hr class="divider">
-          <p class="snippet-eyebrow">🎸 ベース</p>
-          <div class="wave-picker" id="bassWavePicker">
-            <button type="button" class="wave-btn active" data-wave="sine">サイン(やわらか)</button>
+        <div class="composer-step">
+          <div class="composer-step-head">
+            <span class="composer-step-num">2</span>
+            <div><h3>メロディを自分で作る</h3><p>音色を選んで、音符をタップして並べていきます。</p></div>
+          </div>
+          <div class="wave-picker" id="wavePicker">
+            <button type="button" class="wave-btn active" data-wave="sine">サイン(まる)</button>
             <button type="button" class="wave-btn" data-wave="triangle">トライアングル</button>
-            <button type="button" class="wave-btn" data-wave="square">スクエア(太め)</button>
+            <button type="button" class="wave-btn" data-wave="square">スクエア(角)</button>
+            <button type="button" class="wave-btn" data-wave="sawtooth">ソウ(鋭い)</button>
             <button type="button" class="wave-btn" data-wave="acoustic">🎸 アコギ</button>
             <button type="button" class="wave-btn" data-wave="piano">🎹 ピアノ</button>
-          </div>
-          <div class="note-picker" id="bassOctavePicker" style="margin-top:10px;">
-            <button type="button" class="note-btn" data-bass-octave="1">1オクターブ上</button>
-            <button type="button" class="note-btn active" data-bass-octave="0">ふつう</button>
-            <button type="button" class="note-btn" data-bass-octave="-1">1オクターブ下</button>
-          </div>
-          <div class="note-picker" id="bassNotePicker">
-            <button type="button" class="note-btn" data-freq="65.41">ド</button>
-            <button type="button" class="note-btn" data-freq="73.42">レ</button>
-            <button type="button" class="note-btn" data-freq="82.41">ミ</button>
-            <button type="button" class="note-btn" data-freq="87.31">ファ</button>
-            <button type="button" class="note-btn" data-freq="98.00">ソ</button>
-            <button type="button" class="note-btn" data-freq="110.00">ラ</button>
-            <button type="button" class="note-btn" data-freq="123.47">シ</button>
-            <button type="button" class="note-btn" data-freq="130.81">ド(高)</button>
-            <button type="button" class="note-btn rest-btn" data-freq="0">♪― お休み</button>
-          </div>
-          <div class="note-seq" id="bassNoteSeq"><span class="note-seq-empty">ベースの音をタップして、メロディーの土台を作りましょう</span></div>
-          <div class="composer-actions">
-            <button type="button" class="btn" id="bassUndoBtn">⌫ ひとつ戻す</button>
-            <button type="button" class="btn" id="bassResetBtn">ベースをリセット</button>
+            <button type="button" class="wave-btn" data-wave="trumpet">🎺 トランペット</button>
+            <button type="button" class="wave-btn" data-wave="violin">🎻 バイオリン</button>
           </div>
 
-          <p class="snippet-eyebrow" style="margin-top:22px;">🥁 ドラム</p>
-          <p class="broadcast-desc" style="margin-top:0;">使いたいパーツを選んで、マスをタップしてリズムパターンを作りましょう。</p>
-          <div class="drum-part-picker" id="drumPartPicker"></div>
-          <div class="drum-grid" id="drumGrid"></div>
-          <div class="composer-actions">
-            <button type="button" class="btn" id="drumAddBarBtn">+8コマ追加</button>
-            <button type="button" class="btn" id="drumResetBtn">ドラムをリセット</button>
+          <div class="mode-tabs" id="modeTabs">
+            <button type="button" class="mode-tab active" data-mode="easy">かんたんモード</button>
+            <button type="button" class="mode-tab" data-mode="pro">玄人モード</button>
           </div>
-          <p class="audio-note">メロディ・ベース・ドラムは同じテンポで一緒に鳴ります。長さが違うパートは、短い方の後ろが無音になるだけなので心配いりません。</p>
+
+          <div class="composer-mode" id="easyMode">
+            <div class="note-picker" id="notePicker">
+              <button type="button" class="note-btn" data-freq="261.63">ド</button>
+              <button type="button" class="note-btn" data-freq="293.66">レ</button>
+              <button type="button" class="note-btn" data-freq="329.63">ミ</button>
+              <button type="button" class="note-btn" data-freq="349.23">ファ</button>
+              <button type="button" class="note-btn" data-freq="392.00">ソ</button>
+              <button type="button" class="note-btn" data-freq="440.00">ラ</button>
+              <button type="button" class="note-btn" data-freq="493.88">シ</button>
+              <button type="button" class="note-btn" data-freq="523.25">ド(高)</button>
+            </div>
+            <p class="broadcast-desc" style="margin-top:10px;">🎸 コードも1タップで追加できます（1ストロークぶん）</p>
+            <div class="chord-picker" id="chordPicker">
+              <button type="button" class="chord-btn" data-notes="261.63,329.63,392.00">C</button>
+              <button type="button" class="chord-btn" data-notes="196.00,246.94,293.66">G</button>
+              <button type="button" class="chord-btn" data-notes="220.00,261.63,329.63">Am</button>
+              <button type="button" class="chord-btn" data-notes="174.61,220.00,261.63">F</button>
+              <button type="button" class="chord-btn" data-notes="164.81,196.00,246.94">Em</button>
+              <button type="button" class="chord-btn" data-notes="293.66,369.99,440.00">D</button>
+            </div>
+          </div>
+
+          <div class="composer-mode" id="proMode" style="display:none;">
+            <p class="broadcast-desc" style="margin-top:0;">2オクターブのキーボードで一音ずつ作れます。半音や休符も使えます。</p>
+            <div class="piano-row" id="pianoRow"></div>
+            <div class="composer-actions" style="margin-top:10px;">
+              <button type="button" class="btn" id="restBtn">♪― 休符を入れる</button>
+              <button type="button" class="btn" id="chordModeToggle">🎶 コードを組む(オフ)</button>
+              <button type="button" class="btn btn-primary" id="commitChordBtn" style="display:none;">この組み合わせを追加</button>
+              <button type="button" class="btn" id="clearChordBtn" style="display:none;">選択をクリア</button>
+            </div>
+            <p class="audio-note">コードを組む：オンにしてからキーを複数タップ(例:B,D#,F#でB)→「追加」。Bのような細かいコードも自由に作れます。</p>
+          </div>
+
+          <div class="note-seq" id="noteSeq"><span class="note-seq-empty">音符をタップして、メロディーを作ってみましょう（2〜32音）</span></div>
+          <div class="composer-actions" style="margin-top:10px;">
+            <button type="button" class="btn" id="undoNoteBtn">⌫ ひとつ戻す</button>
+            <button type="button" class="btn" id="resetNoteBtn">リセット</button>
+            <button type="button" class="btn btn-primary" id="previewNoteBtn">▶ 試聴する</button>
+          </div>
         </div>
 
-        <p class="snippet-eyebrow" style="margin-top:18px;">🏷️ ムード（最大3つまで・任意）</p>
-        <div class="mood-tag-picker" id="moodTagPicker"></div>
+        <div class="composer-step">
+          <div class="composer-step-head">
+            <span class="composer-step-num">3</span>
+            <div><h3>伴奏を加える（コード進行・バンド編成）</h3><p>ベース・コード伴奏・ドラムを足して、1曲分に厚みを出します。</p></div>
+          </div>
+          <p class="snippet-eyebrow">🎼 コード進行テンプレ</p>
+          <p class="broadcast-desc" style="margin-top:0;">よく使われる進行を選ぶと、ベース・コード・簡単なドラムが自動で組まれます（バンド編成が自動でONになります）。</p>
+          <div class="chord-template-picker" id="chordTemplatePicker"></div>
 
-        <div class="composer-actions">
-          <button type="button" class="btn" id="undoNoteBtn">⌫ ひとつ戻す</button>
-          <button type="button" class="btn" id="resetNoteBtn">リセット</button>
-          <button type="button" class="btn btn-primary" id="previewNoteBtn">▶ 試聴する</button>
-          <button type="button" class="btn" id="downloadDraftBtn">⬇ ダウンロード</button>
-          <button type="button" class="btn btn-primary" id="submitTrackBtn">投稿する</button>
+          <div class="band-toggle-row" style="margin-top:18px;">
+            <button type="button" class="btn btn-primary" id="bandModeToggle">🎸 バンド編成にする（ベース・ドラムを追加）</button>
+          </div>
+
+          <div id="bandModeSection" style="display:none; margin-top:14px;">
+            <hr class="divider">
+            <p class="snippet-eyebrow">🎸 ベース</p>
+            <div class="wave-picker" id="bassWavePicker">
+              <button type="button" class="wave-btn active" data-wave="sine">サイン(やわらか)</button>
+              <button type="button" class="wave-btn" data-wave="triangle">トライアングル</button>
+              <button type="button" class="wave-btn" data-wave="square">スクエア(太め)</button>
+              <button type="button" class="wave-btn" data-wave="acoustic">🎸 アコギ</button>
+              <button type="button" class="wave-btn" data-wave="piano">🎹 ピアノ</button>
+            </div>
+            <div class="note-picker" id="bassOctavePicker" style="margin-top:10px;">
+              <button type="button" class="note-btn" data-bass-octave="1">1オクターブ上</button>
+              <button type="button" class="note-btn active" data-bass-octave="0">ふつう</button>
+              <button type="button" class="note-btn" data-bass-octave="-1">1オクターブ下</button>
+            </div>
+            <div class="note-picker" id="bassNotePicker">
+              <button type="button" class="note-btn" data-freq="65.41">ド</button>
+              <button type="button" class="note-btn" data-freq="73.42">レ</button>
+              <button type="button" class="note-btn" data-freq="82.41">ミ</button>
+              <button type="button" class="note-btn" data-freq="87.31">ファ</button>
+              <button type="button" class="note-btn" data-freq="98.00">ソ</button>
+              <button type="button" class="note-btn" data-freq="110.00">ラ</button>
+              <button type="button" class="note-btn" data-freq="123.47">シ</button>
+              <button type="button" class="note-btn" data-freq="130.81">ド(高)</button>
+              <button type="button" class="note-btn rest-btn" data-freq="0">♪― お休み</button>
+            </div>
+            <div class="note-seq" id="bassNoteSeq"><span class="note-seq-empty">ベースの音をタップして、メロディーの土台を作りましょう</span></div>
+            <div class="composer-actions">
+              <button type="button" class="btn" id="bassUndoBtn">⌫ ひとつ戻す</button>
+              <button type="button" class="btn" id="bassResetBtn">ベースをリセット</button>
+            </div>
+
+            <p class="snippet-eyebrow" style="margin-top:22px;">🥁 ドラム</p>
+            <p class="broadcast-desc" style="margin-top:0;">使いたいパーツを選んで、マスをタップしてリズムパターンを作りましょう。</p>
+            <div class="drum-part-picker" id="drumPartPicker"></div>
+            <div class="drum-grid" id="drumGrid"></div>
+            <div class="composer-actions">
+              <button type="button" class="btn" id="drumAddBarBtn">+8コマ追加</button>
+              <button type="button" class="btn" id="drumResetBtn">ドラムをリセット</button>
+            </div>
+            <p class="audio-note">メロディ・ベース・ドラムは同じテンポで一緒に鳴ります。長さが違うパートは、短い方の後ろが無音になるだけなので心配いりません。</p>
+          </div>
         </div>
-        <p class="locked-note">🔒 ライブラリへの投稿にはログインが必要です（試聴・ダウンロードはログインなしでもできます）。<button class="btn" type="button" onclick="document.getElementById('loginBtn').click();">ログイン</button></p>
-        <p class="audio-note" id="composerNote"></p>
+
+        <div class="composer-step">
+          <div class="composer-step-head">
+            <span class="composer-step-num">4</span>
+            <div><h3>ムード・投稿</h3><p>雰囲気タグをつけて、完成した曲を投稿しましょう。</p></div>
+          </div>
+          <p class="snippet-eyebrow">🏷️ ムード（最大3つまで・任意）</p>
+          <div class="mood-tag-picker" id="moodTagPicker"></div>
+
+          <div class="composer-actions" style="margin-top:16px;">
+            <button type="button" class="btn" id="downloadDraftBtn">⬇ ダウンロード</button>
+            <button type="button" class="btn btn-primary" id="submitTrackBtn">投稿する</button>
+          </div>
+          <p class="locked-note">🔒 ライブラリへの投稿にはログインが必要です（試聴・ダウンロードはログインなしでもできます）。<button class="btn" type="button" onclick="document.getElementById('loginBtn').click();">ログイン</button></p>
+          <p class="audio-note" id="composerNote"></p>
+        </div>
       </div>
 
       <div class="library-toolbar">
@@ -2914,18 +2959,13 @@
       title: '夜が明けるまで',
       artist: '三日月レイ',
       cover: 'c4',
-      waveform: 'sawtooth',
       stepTime: 0.22,
       durationSeconds: 110,
-      melody: [
-        329.63, 293.66, 261.63, null, 293.66, 329.63, 392.00, null,
-        329.63, 293.66, 261.63, 293.66, 329.63, null, 293.66, 261.63,
-        246.94, 220.00, 246.94, 261.63, 293.66, null, 329.63, null,
-        329.63, 349.23, 392.00, 440.00, 493.88, null, 523.25, null,
-        523.25, null, 493.88, 440.00, 392.00, null, 440.00, 493.88,
-        523.25, null, 587.33, null, 523.25, 493.88, 440.00, 392.00,
-        349.23, null, 392.00, 440.00, 493.88, null, 523.25, null,
-        392.00, 349.23, 329.63, 293.66, 261.63, null, null, null
+      lanes: [
+        { type: 'melody', waveform: 'sawtooth', octaveShift: 0, notes: [329.63, 293.66, 261.63, null, 293.66, 329.63, 392.00, null, 329.63, 293.66, 261.63, 293.66, 329.63, null, 293.66, 261.63, 246.94, 220.00, 246.94, 261.63, 293.66, null, 329.63, null, 329.63, 349.23, 392.00, 440.00, 493.88, null, 523.25, null, 523.25, null, 493.88, 440.00, 392.00, null, 440.00, 493.88, 523.25, null, 587.33, null, 523.25, 493.88, 440.00, 392.00, 349.23, null, 392.00, 440.00, 493.88, null, 523.25, null, 392.00, 349.23, 329.63, 293.66, 261.63, null, null, null] },
+        { type: 'chord', waveform: 'triangle', volume: 0.35, notes: [[440.00, 523.25, 659.26], null, null, null, [440.00, 523.25, 659.26], null, null, null, [349.23, 440.00, 523.25], null, null, null, [349.23, 440.00, 523.25], null, null, null, [261.63, 329.63, 392.00], null, null, null, [261.63, 329.63, 392.00], null, null, null, [392.00, 493.88, 587.33], null, null, null, [392.00, 493.88, 587.33], null, null, null, [440.00, 523.25, 659.26], null, null, null, [440.00, 523.25, 659.26], null, null, null, [349.23, 440.00, 523.25], null, null, null, [349.23, 440.00, 523.25], null, null, null, [261.63, 329.63, 392.00], null, null, null, [261.63, 329.63, 392.00], null, null, null, [392.00, 493.88, 587.33], null, null, null, [392.00, 493.88, 587.33], null, null, null] },
+        { type: 'bass', waveform: 'square', volume: 0.75, notes: [110.00, null, 110.00, null, 110.00, null, 110.00, null, 87.31, null, 87.31, null, 87.31, null, 87.31, null, 65.41, null, 65.41, null, 65.41, null, 65.41, null, 98.00, null, 98.00, null, 98.00, null, 98.00, null, 110.00, null, 110.00, null, 110.00, null, 110.00, null, 87.31, null, 87.31, null, 87.31, null, 87.31, null, 65.41, null, 65.41, null, 65.41, null, 65.41, null, 98.00, null, 98.00, null, 98.00, null, 98.00, null] },
+        { type: 'drums', volume: 0.9, notes: [['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null, ['kick','hihat'], null, ['hihat'], null, ['kick','snare','hihat'], null, ['hihat'], null] }
       ]
     }
   };
