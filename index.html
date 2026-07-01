@@ -3214,45 +3214,76 @@
   };
   function isVocalWaveform(waveform){ return !!VOCAL_FORMANTS[waveform]; }
 
-  function playVocalNote(ctx, destination, waveform, freq, startTime, duration, levelScale){
+  // 連続する音符（休符が来るまで）を1つの「フレーズ」としてまとめ、1本の音を滑らかに繋げて鳴らします。
+  // 単音ごとに新しい音を立ち上げていた前バージョンと違い、実際に歌っているような自然さになります。
+  // nodeSink（配列）を渡すと、生成したノードをそこに積んでおき、あとで止められるようにします（省略可、オフライン書き出し時は不要）。
+  function scheduleVocalPhrase(ctx, destination, waveform, notes, stepTime, startTime, octaveMul, levelScale, nodeSink){
     var info = VOCAL_FORMANTS[waveform] || VOCAL_FORMANTS.vocal_a;
-    var osc = ctx.createOscillator();
-    osc.type = 'sawtooth'; // 倍音が豊富で、フォルマント成形の元波形に向いている
-    osc.frequency.setValueAtTime(freq, startTime);
+    var glideTime = Math.min(stepTime * 0.35, 0.09); // 次の音へ滑らかに移る時間（ポルタメント）
+    var i = 0;
+    while(i < notes.length){
+      if(!notes[i]){ i++; continue; }
+      // ここから休符が来るまでを1フレーズとして連続させる（コードが来た場合は先頭の音だけを歌わせます）
+      var phraseStart = i;
+      var freqs = [];
+      while(i < notes.length && notes[i]){
+        var step = notes[i];
+        freqs.push((Array.isArray(step) ? step[0] : step) * octaveMul);
+        i++;
+      }
+      var phraseStartTime = startTime + phraseStart * stepTime;
+      var phraseDuration = freqs.length * stepTime;
 
-    // 声らしさを出すための、ごく軽いビブラート
-    var vibrato = ctx.createOscillator();
-    vibrato.frequency.value = 5.5;
-    var vibratoGain = ctx.createGain();
-    vibratoGain.gain.value = freq * 0.012;
-    vibrato.connect(vibratoGain).connect(osc.frequency);
-    vibrato.start(startTime);
-    vibrato.stop(startTime + duration + 0.05);
+      var osc = ctx.createOscillator();
+      osc.type = 'sawtooth'; // 倍音が豊富で、フォルマント成形の元波形に向いている
+      osc.frequency.setValueAtTime(freqs[0], phraseStartTime);
+      for(var k = 1; k < freqs.length; k++){
+        var changeTime = phraseStartTime + k * stepTime;
+        osc.frequency.setValueAtTime(freqs[k - 1], changeTime); // 直前の音の高さを保ってから…
+        osc.frequency.linearRampToValueAtTime(freqs[k], changeTime + glideTime); // …次の音へ滑らかに移動
+      }
 
-    var oscGain = ctx.createGain();
-    oscGain.gain.setValueAtTime(0.0001, startTime);
-    oscGain.gain.exponentialRampToValueAtTime(0.9, startTime + 0.03);
-    oscGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-    osc.connect(oscGain);
+      // 声らしさを出すための、ごく軽いビブラート
+      var vibrato = ctx.createOscillator();
+      vibrato.frequency.value = 5.5;
+      var vibratoGain = ctx.createGain();
+      vibratoGain.gain.value = freqs[0] * 0.012;
+      vibrato.connect(vibratoGain).connect(osc.frequency);
+      vibrato.start(phraseStartTime);
+      vibrato.stop(phraseStartTime + phraseDuration + 0.05);
 
-    var outGain = ctx.createGain();
-    outGain.gain.value = 0.55 * (levelScale || 1);
+      var oscGain = ctx.createGain();
+      oscGain.gain.setValueAtTime(0.0001, phraseStartTime);
+      oscGain.gain.exponentialRampToValueAtTime(0.9, phraseStartTime + 0.03);
+      // フレーズの最後だけなめらかにリリース（音符が変わるたびには切れない＝レガート）
+      var releaseStart = Math.max(phraseStartTime + 0.03, phraseStartTime + phraseDuration - 0.06);
+      oscGain.gain.setValueAtTime(0.9, releaseStart);
+      oscGain.gain.exponentialRampToValueAtTime(0.0001, phraseStartTime + phraseDuration);
+      osc.connect(oscGain);
 
-    // 3つのバンドパスフィルター（フォルマント）を並列にかけて、母音らしい響きに整える
-    info.formants.forEach(function(fFreq, idx){
-      var bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = fFreq;
-      bp.Q.value = 9;
-      var fGain = ctx.createGain();
-      fGain.gain.value = idx === 0 ? 1 : (idx === 1 ? 0.55 : 0.3);
-      oscGain.connect(bp).connect(fGain).connect(outGain);
-    });
-    outGain.connect(destination);
+      var outGain = ctx.createGain();
+      outGain.gain.value = 0.55 * (levelScale || 1);
 
-    osc.start(startTime);
-    osc.stop(startTime + duration + 0.05);
-    return { source: osc, gain: outGain };
+      // 3つのバンドパスフィルター（フォルマント）を並列にかけて、母音らしい響きに整える
+      info.formants.forEach(function(fFreq, idx){
+        var bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = fFreq;
+        bp.Q.value = 9;
+        var fGain = ctx.createGain();
+        fGain.gain.value = idx === 0 ? 1 : (idx === 1 ? 0.55 : 0.3);
+        oscGain.connect(bp).connect(fGain).connect(outGain);
+      });
+      outGain.connect(destination);
+
+      osc.start(phraseStartTime);
+      osc.stop(phraseStartTime + phraseDuration + 0.05);
+
+      if(nodeSink){
+        nodeSink.push({ source: osc, gain: oscGain });
+        nodeSink.push({ source: vibrato, gain: vibratoGain });
+      }
+    }
   }
 
   // 旧コードとの互換のため、'acoustic' 専用の名前でも呼べるようにしておきます
@@ -3419,6 +3450,12 @@
         var notes = lane.notes || [];
         var octaveMul = Math.pow(2, lane.octaveShift || 0);
         var laneVolume = lane.volume != null ? lane.volume : 1;
+        var waveform = lane.waveform || 'sine';
+        if(lane.type !== 'drums' && isVocalWaveform(waveform)){
+          // ボイスレーンは1音ずつではなく、連続する音符をひとつなぎのフレーズとして滑らかに歌わせます（レガート）
+          scheduleVocalPhrase(ctx, masterBus, waveform, notes, stepTime, startTime, octaveMul, laneVolume, activeNodes);
+          return;
+        }
         notes.forEach(function(step, i){
           if(!step) return;
           var t = startTime + i * stepTime;
@@ -3432,20 +3469,13 @@
           }
           var freqs = Array.isArray(step) ? step : [step];
           var levelScale = 1 / Math.sqrt(freqs.length);
-          var waveform = lane.waveform || 'sine';
           var isSample = isSampleWaveform(waveform);
-          var isVocal = isVocalWaveform(waveform);
           freqs.forEach(function(rawFreq, fi){
             var freq = rawFreq * octaveMul;
-            var noteTime = (isSample || isVocal) ? t + fi * 0.014 : t;
+            var noteTime = isSample ? t + fi * 0.014 : t;
             if(isSample){
               var node = playSampleNote(ctx, masterBus, waveform, freq, noteTime, levelScale * laneVolume);
               if(node) activeNodes.push(node);
-              return;
-            }
-            if(isVocal){
-              var vnode = playVocalNote(ctx, masterBus, waveform, freq, noteTime, stepTime, levelScale * laneVolume);
-              if(vnode) activeNodes.push(vnode);
               return;
             }
             var o = ctx.createOscillator(); o.type = waveform; o.frequency.value = freq;
@@ -3483,35 +3513,35 @@
     function doSchedule(){
       activeNodes = []; // 前のループの音はもう鳴り終わっているはずなので、参照だけ整理
       var startTime = ctx.currentTime + 0.04;
-      notes.forEach(function(step, i){
-        if(!step) return; // 休符はスキップ（時間だけ進む）
-        var t = startTime + i * stepTime;
-        var freqs = Array.isArray(step) ? step : [step];
-        var levelScale = 1 / Math.sqrt(freqs.length);
-        freqs.forEach(function(rawFreq, fi){
-          var freq = rawFreq * octaveMul;
-          var noteTime = (isSample || isVocal) ? t + fi * 0.014 : t; // コードはわずかにストロークをずらす
-          if(isSample){
-            var node = playSampleNote(ctx, masterBus, waveform, freq, noteTime, levelScale);
-            if(node) activeNodes.push(node);
-            return;
-          }
-          if(isVocal){
-            var vnode = playVocalNote(ctx, masterBus, waveform, freq, noteTime, stepTime, levelScale);
-            if(vnode) activeNodes.push(vnode);
-            return;
-          }
-          var o = ctx.createOscillator(); o.type = waveform || 'sine'; o.frequency.value = freq;
-          var g = ctx.createGain();
-          g.gain.setValueAtTime(0.0001, noteTime);
-          g.gain.exponentialRampToValueAtTime(0.5 * levelScale, noteTime + 0.02);
-          g.gain.exponentialRampToValueAtTime(0.0001, noteTime + stepTime * 0.85);
-          o.connect(g).connect(masterBus);
-          o.start(noteTime);
-          o.stop(noteTime + stepTime);
-          activeNodes.push({ source: o, gain: g });
+      if(isVocal){
+        // ボイスは1音ずつではなく、連続する音符をひとつなぎのフレーズとして滑らかに歌わせます（レガート）
+        scheduleVocalPhrase(ctx, masterBus, waveform, notes, stepTime, startTime, octaveMul, 1, activeNodes);
+      } else {
+        notes.forEach(function(step, i){
+          if(!step) return; // 休符はスキップ（時間だけ進む）
+          var t = startTime + i * stepTime;
+          var freqs = Array.isArray(step) ? step : [step];
+          var levelScale = 1 / Math.sqrt(freqs.length);
+          freqs.forEach(function(rawFreq, fi){
+            var freq = rawFreq * octaveMul;
+            var noteTime = isSample ? t + fi * 0.014 : t; // コードはわずかにストロークをずらす
+            if(isSample){
+              var node = playSampleNote(ctx, masterBus, waveform, freq, noteTime, levelScale);
+              if(node) activeNodes.push(node);
+              return;
+            }
+            var o = ctx.createOscillator(); o.type = waveform || 'sine'; o.frequency.value = freq;
+            var g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, noteTime);
+            g.gain.exponentialRampToValueAtTime(0.5 * levelScale, noteTime + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, noteTime + stepTime * 0.85);
+            o.connect(g).connect(masterBus);
+            o.start(noteTime);
+            o.stop(noteTime + stepTime);
+            activeNodes.push({ source: o, gain: g });
+          });
         });
-      });
+      }
       melodyTimer = setTimeout(function(){
         if(currentMelodyId === id) scheduleMelody(id, notes, waveform, stepTime, octaveShift, effects);
       }, notes.length * stepTime * 1000);
@@ -3592,43 +3622,44 @@
         var laneVolume = lane.volume != null ? lane.volume : 1;
         var waveform = lane.waveform || 'sine';
         var loopTime = notes.length * stepTime;
+        var isVocalLane = lane.type !== 'drums' && isVocalWaveform(waveform);
         var t = 0;
         while(t < durationSeconds){
-          notes.forEach(function(step, i){
-            if(!step) return;
-            var noteStart = t + i * stepTime;
-            if(noteStart >= durationSeconds) return;
-            if(lane.type === 'drums'){
-              var hits = Array.isArray(step) ? step : [step];
-              hits.forEach(function(hit){ playDrumHit(hit, offlineCtx, masterBus, noteStart, laneVolume); });
-              return;
-            }
-            var freqs = Array.isArray(step) ? step : [step];
-            var levelScale = 1 / Math.sqrt(freqs.length);
-            var isSample = isSampleWaveform(waveform);
-            var isVocal = isVocalWaveform(waveform);
-            freqs.forEach(function(rawFreq, fi){
-              var freq = rawFreq * octaveMul;
-              var noteTime = (isSample || isVocal) ? noteStart + fi * 0.014 : noteStart;
-              if(isSample){
-                playSampleNote(offlineCtx, masterBus, waveform, freq, noteTime, levelScale * laneVolume);
+          if(isVocalLane){
+            // ボイスレーンは1音ずつではなく、連続する音符をひとつなぎのフレーズとして滑らかに歌わせます（レガート）
+            scheduleVocalPhrase(offlineCtx, masterBus, waveform, notes, stepTime, t, octaveMul, laneVolume, null);
+          } else {
+            notes.forEach(function(step, i){
+              if(!step) return;
+              var noteStart = t + i * stepTime;
+              if(noteStart >= durationSeconds) return;
+              if(lane.type === 'drums'){
+                var hits = Array.isArray(step) ? step : [step];
+                hits.forEach(function(hit){ playDrumHit(hit, offlineCtx, masterBus, noteStart, laneVolume); });
                 return;
               }
-              if(isVocal){
-                playVocalNote(offlineCtx, masterBus, waveform, freq, noteTime, stepTime, levelScale * laneVolume);
-                return;
-              }
-              var o = offlineCtx.createOscillator(); o.type = waveform; o.frequency.value = freq;
-              var g = offlineCtx.createGain();
-              var peak = 0.5 * levelScale * laneVolume;
-              g.gain.setValueAtTime(0.0001, noteTime);
-              g.gain.exponentialRampToValueAtTime(peak, noteTime + 0.02);
-              g.gain.exponentialRampToValueAtTime(0.0001, Math.min(durationSeconds - 0.001, noteTime + stepTime * 0.85));
-              o.connect(g).connect(masterBus);
-              o.start(noteTime);
-              o.stop(Math.min(durationSeconds, noteTime + stepTime));
+              var freqs = Array.isArray(step) ? step : [step];
+              var levelScale = 1 / Math.sqrt(freqs.length);
+              var isSample = isSampleWaveform(waveform);
+              freqs.forEach(function(rawFreq, fi){
+                var freq = rawFreq * octaveMul;
+                var noteTime = isSample ? noteStart + fi * 0.014 : noteStart;
+                if(isSample){
+                  playSampleNote(offlineCtx, masterBus, waveform, freq, noteTime, levelScale * laneVolume);
+                  return;
+                }
+                var o = offlineCtx.createOscillator(); o.type = waveform; o.frequency.value = freq;
+                var g = offlineCtx.createGain();
+                var peak = 0.5 * levelScale * laneVolume;
+                g.gain.setValueAtTime(0.0001, noteTime);
+                g.gain.exponentialRampToValueAtTime(peak, noteTime + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, Math.min(durationSeconds - 0.001, noteTime + stepTime * 0.85));
+                o.connect(g).connect(masterBus);
+                o.start(noteTime);
+                o.stop(Math.min(durationSeconds, noteTime + stepTime));
+              });
             });
-          });
+          }
           t += loopTime;
         }
       });
