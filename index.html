@@ -1329,7 +1329,7 @@
           </div>
 
           <p class="snippet-eyebrow" style="margin-top:20px;">🌙 エフェクト</p>
-          <p class="broadcast-desc" style="margin-top:0;">「眠れない夜」らしい残響・エコーを足せます。投稿した曲にもそのまま反映されます。</p>
+          <p class="broadcast-desc" style="margin-top:0;">「眠れない夜」らしい残響・エコーや、バンドサウンドの厚み・歪みを足せます。投稿した曲にもそのまま反映されます。</p>
           <div class="mixer-panel">
             <div class="mixer-row">
               <span class="mixer-label">🌌 リバーブ</span>
@@ -1340,6 +1340,16 @@
               <span class="mixer-label">🔁 ディレイ(エコー)</span>
               <input type="range" class="mixer-slider" id="fxDelay" min="0" max="100" value="0">
               <span class="mixer-value" id="fxDelayValue">0%</span>
+            </div>
+            <div class="mixer-row">
+              <span class="mixer-label">🎻 コーラス</span>
+              <input type="range" class="mixer-slider" id="fxChorus" min="0" max="100" value="0">
+              <span class="mixer-value" id="fxChorusValue">0%</span>
+            </div>
+            <div class="mixer-row">
+              <span class="mixer-label">🎸 ディストーション</span>
+              <input type="range" class="mixer-slider" id="fxDistortion" min="0" max="100" value="0">
+              <span class="mixer-value" id="fxDistortionValue">0%</span>
             </div>
           </div>
           <div class="composer-actions">
@@ -3062,8 +3072,8 @@
     return melodyCtx;
   }
 
-  // ---------- 🌙 エフェクト（リバーブ・ディレイ） ----------
-  // 「眠れない夜のラジオ」らしい残響・エコーを、曲ごとの設定として持たせられるようにします
+  // ---------- 🌙 エフェクト（リバーブ・ディレイ・コーラス・ディストーション） ----------
+  // 「眠れない夜のラジオ」らしい残響・エコーや、バンドサウンドらしい厚み・歪みを曲ごとの設定として持たせられるようにします
   var reverbImpulseCache = {};
   function getReverbImpulse(ctx, seconds){
     var key = ctx.sampleRate + '_' + seconds;
@@ -3079,13 +3089,57 @@
     reverbImpulseCache[key] = impulse;
     return impulse;
   }
-  // レーンの音はすべてこの関数が返す「入り口(masterBus)」に繋ぐと、ドライ音＋リバーブ＋ディレイが
+  var distortionCurveCache = {};
+  function getDistortionCurve(amount){
+    // amount: 0〜1。WaveShaperNode用の歪みカーブ（定番の式）を、20段階に丸めてキャッシュします
+    var key = Math.round(amount * 20);
+    if(distortionCurveCache[key]) return distortionCurveCache[key];
+    var k = (key / 20) * 60 + 1;
+    var n = 4096;
+    var curve = new Float32Array(n);
+    var deg = Math.PI / 180;
+    for(var i = 0; i < n; i++){
+      var x = i * 2 / n - 1;
+      curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+    }
+    distortionCurveCache[key] = curve;
+    return curve;
+  }
+  // レーンの音はすべてこの関数が返す「入り口(masterBus)」に繋ぐと、ドライ音＋各エフェクトが
   // まとめて最終出力(destination)に送られます。effectsが空なら、ただの素通し(ドライのみ)になります。
-  function buildEffectChain(ctx, destination, effects){
+  // chorusStopTime を渡すと、コーラス用のLFOをその時刻で止められます（ループ再生のたびに新しく
+  // 作り直されるので、止めないとLFOが鳴らないまま増え続けてしまうのを防ぎます）。
+  function buildEffectChain(ctx, destination, effects, chorusStopTime){
     var input = ctx.createGain();
-    input.connect(destination);
-    if(!effects) return input;
+    if(!effects){ input.connect(destination); return input; }
 
+    // ドライ経路（ディストーションが強いほど、素の音は控えめにする）
+    var dryGain = ctx.createGain();
+    dryGain.gain.value = effects.distortion > 0 ? Math.max(0.15, 1 - effects.distortion * 0.8) : 1;
+    input.connect(dryGain).connect(destination);
+
+    if(effects.distortion > 0){
+      var shaper = ctx.createWaveShaper();
+      shaper.curve = getDistortionCurve(effects.distortion);
+      shaper.oversample = '2x';
+      var distGain = ctx.createGain();
+      distGain.gain.value = effects.distortion;
+      input.connect(shaper).connect(distGain).connect(destination);
+    }
+    if(effects.chorus > 0){
+      var chorusDelay = ctx.createDelay(0.05);
+      chorusDelay.delayTime.value = 0.018;
+      var lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.9;
+      var lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.006;
+      lfo.connect(lfoGain).connect(chorusDelay.delayTime);
+      lfo.start();
+      if(chorusStopTime) lfo.stop(chorusStopTime);
+      var chorusWet = ctx.createGain();
+      chorusWet.gain.value = effects.chorus * 0.8;
+      input.connect(chorusDelay).connect(chorusWet).connect(destination);
+    }
     if(effects.reverb > 0){
       var convolver = ctx.createConvolver();
       convolver.buffer = getReverbImpulse(ctx, 2.4);
@@ -3356,7 +3410,7 @@
     var ctx = ensureMelodyCtx();
     stepTime = stepTime || 0.32;
     var maxLen = lanes.reduce(function(m, l){ return Math.max(m, (l.notes || []).length); }, 0);
-    var masterBus = buildEffectChain(ctx, ctx.destination, effects);
+    var masterBus = buildEffectChain(ctx, ctx.destination, effects, ctx.currentTime + maxLen * stepTime + 0.5);
 
     function doSchedule(){
       activeNodes = [];
@@ -3424,7 +3478,7 @@
     var octaveMul = Math.pow(2, octaveShift || 0);
     var isSample = isSampleWaveform(waveform);
     var isVocal = isVocalWaveform(waveform);
-    var masterBus = buildEffectChain(ctx, ctx.destination, effects);
+    var masterBus = buildEffectChain(ctx, ctx.destination, effects, ctx.currentTime + notes.length * stepTime + 0.5);
 
     function doSchedule(){
       activeNodes = []; // 前のループの音はもう鳴り終わっているはずなので、参照だけ整理
@@ -3528,7 +3582,7 @@
     var length = Math.max(1, Math.ceil(durationSeconds * sampleRate));
     var offlineCtx = new OfflineAudioContext(1, length, sampleRate);
     stepTime = stepTime || 0.32;
-    var masterBus = buildEffectChain(offlineCtx, offlineCtx.destination, effects);
+    var masterBus = buildEffectChain(offlineCtx, offlineCtx.destination, effects, durationSeconds);
 
     function doRender(){
       lanes.forEach(function(lane){
@@ -5072,7 +5126,7 @@
 
   // ---------- 🎚️ ミキサー・エフェクト ----------
   var mixerVolumes = { melody: 1, chord: 1, bass: 1, drums: 1 };
-  var mixerEffects = { reverb: 0, delay: 0 };
+  var mixerEffects = { reverb: 0, delay: 0, chorus: 0, distortion: 0 };
   function wireMixerSlider(sliderId, valueId, targetObj, key, isPercentOf100){
     var slider = document.getElementById(sliderId);
     var valueEl = document.getElementById(valueId);
@@ -5088,10 +5142,12 @@
   wireMixerSlider('mixerDrums', 'mixerDrumsValue', mixerVolumes, 'drums');
   wireMixerSlider('fxReverb', 'fxReverbValue', mixerEffects, 'reverb');
   wireMixerSlider('fxDelay', 'fxDelayValue', mixerEffects, 'delay');
+  wireMixerSlider('fxChorus', 'fxChorusValue', mixerEffects, 'chorus');
+  wireMixerSlider('fxDistortion', 'fxDistortionValue', mixerEffects, 'distortion');
   document.getElementById('mixerResetBtn').addEventListener('click', function(){
     mixerVolumes.melody = 1; mixerVolumes.chord = 1; mixerVolumes.bass = 1; mixerVolumes.drums = 1;
-    mixerEffects.reverb = 0; mixerEffects.delay = 0;
-    [['mixerMelody','mixerMelodyValue',100], ['mixerChord','mixerChordValue',100], ['mixerBass','mixerBassValue',100], ['mixerDrums','mixerDrumsValue',100], ['fxReverb','fxReverbValue',0], ['fxDelay','fxDelayValue',0]].forEach(function(row){
+    mixerEffects.reverb = 0; mixerEffects.delay = 0; mixerEffects.chorus = 0; mixerEffects.distortion = 0;
+    [['mixerMelody','mixerMelodyValue',100], ['mixerChord','mixerChordValue',100], ['mixerBass','mixerBassValue',100], ['mixerDrums','mixerDrumsValue',100], ['fxReverb','fxReverbValue',0], ['fxDelay','fxDelayValue',0], ['fxChorus','fxChorusValue',0], ['fxDistortion','fxDistortionValue',0]].forEach(function(row){
       document.getElementById(row[0]).value = row[2];
       document.getElementById(row[1]).textContent = row[2] + '%';
     });
@@ -5667,7 +5723,7 @@
     return lanes;
   }
   function buildComposerEffects(){
-    return { reverb: mixerEffects.reverb, delay: mixerEffects.delay };
+    return { reverb: mixerEffects.reverb, delay: mixerEffects.delay, chorus: mixerEffects.chorus, distortion: mixerEffects.distortion };
   }
   function resetBandInputs(){
     bandModeEnabled = false;
@@ -5714,7 +5770,7 @@
     var isBand = lanes.length > 1;
     var effects = buildComposerEffects();
     var trackData = { title: title, artist: artist, uid: currentUser.uid, durationSeconds: duration, stepTime: stepTime, tags: composerSelectedTags.slice(), createdAt: Date.now() };
-    if(effects.reverb > 0 || effects.delay > 0){ trackData.effects = effects; }
+    if(effects.reverb > 0 || effects.delay > 0 || effects.chorus > 0 || effects.distortion > 0){ trackData.effects = effects; }
     if(isBand){
       trackData.lanes = lanes;
       trackData.isBand = true;
