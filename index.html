@@ -573,6 +573,9 @@
   .cover.c3{ background:linear-gradient(135deg,#3a2d10,#140f0b); }
   .cover.c4{ background:linear-gradient(135deg,#231d4a,#0c0a1c); }
   .mini-eq{ display:flex; gap:2px; align-items:flex-end; height:20px; position:absolute; right:10px; bottom:10px; }
+  .live-visualizer{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  .track-card.playing .cover{ position:relative; }
+  .track-card.playing .mini-eq{ display:none; }
   .mini-eq span{ width:3px; background:rgba(237,234,226,0.55); animation:barSignal 1s ease-in-out infinite; animation-play-state:paused; }
   .mini-eq span:nth-child(2){ animation-delay:.15s; } .mini-eq span:nth-child(3){ animation-delay:.3s; }
   .track-card.playing .mini-eq span{ animation-play-state:running; background:var(--green); }
@@ -708,9 +711,19 @@
   .note-chip{
     font-family:var(--font-mono); font-size:0.78rem; color:var(--green); background:rgba(61,255,160,0.1);
     border:1px solid rgba(61,255,160,0.35); border-radius:6px; padding:5px 9px;
+    transition:transform .12s, box-shadow .12s;
   }
   .note-chip.rest{ color:var(--muted-2); background:transparent; border-style:dashed; }
   .note-chip.chord{ color:var(--pink); background:rgba(255,61,127,0.1); border-color:rgba(255,61,127,0.35); }
+  .note-chip.now-playing{
+    transform:translateY(-3px) scale(1.12);
+    box-shadow:0 0 14px rgba(61,255,160,0.55);
+    background:rgba(61,255,160,0.28); color:#eafff3; border-color:var(--green);
+  }
+  .note-chip.chord.now-playing{
+    box-shadow:0 0 14px rgba(255,61,127,0.55);
+    background:rgba(255,61,127,0.28); color:#ffeaf2; border-color:var(--pink);
+  }
 
   /* ---------- 🥁 ドラムグリッド ---------- */
   .drum-part-picker{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
@@ -3072,6 +3085,24 @@
     return melodyCtx;
   }
 
+  // ---------- 📊 リアルタイム・ビジュアライザー用の出力段 ----------
+  // 再生されるすべての音は、この getVisualOut() が返すノードを最終出力として通ります。
+  // 途中に AnalyserNode が挟んであるので、実際に鳴っている音の周波数データを取り出して描画できます。
+  var visualAnalyser = null;
+  var visualOutNode = null;
+  function getVisualOut(ctx){
+    if(ctx.constructor && String(ctx.constructor).indexOf('Offline') !== -1) return ctx.destination; // 書き出し時は不要
+    if(!visualOutNode || visualOutNode.__ctx !== ctx){
+      visualAnalyser = ctx.createAnalyser();
+      visualAnalyser.fftSize = 64; // 32本の周波数バーが取れる粗さで十分（軽さ優先）
+      visualAnalyser.smoothingTimeConstant = 0.75;
+      visualAnalyser.connect(ctx.destination);
+      visualOutNode = visualAnalyser;
+      visualOutNode.__ctx = ctx;
+    }
+    return visualOutNode;
+  }
+
   // ---------- 🌙 エフェクト（リバーブ・ディレイ・コーラス・ディストーション） ----------
   // 「眠れない夜のラジオ」らしい残響・エコーや、バンドサウンドらしい厚み・歪みを曲ごとの設定として持たせられるようにします
   var reverbImpulseCache = {};
@@ -3441,7 +3472,7 @@
     var ctx = ensureMelodyCtx();
     stepTime = stepTime || 0.32;
     var maxLen = lanes.reduce(function(m, l){ return Math.max(m, (l.notes || []).length); }, 0);
-    var masterBus = buildEffectChain(ctx, ctx.destination, effects, ctx.currentTime + maxLen * stepTime + 0.5);
+    var masterBus = buildEffectChain(ctx, getVisualOut(ctx), effects, ctx.currentTime + maxLen * stepTime + 0.5);
 
     function doSchedule(){
       activeNodes = [];
@@ -3508,7 +3539,7 @@
     var octaveMul = Math.pow(2, octaveShift || 0);
     var isSample = isSampleWaveform(waveform);
     var isVocal = isVocalWaveform(waveform);
-    var masterBus = buildEffectChain(ctx, ctx.destination, effects, ctx.currentTime + notes.length * stepTime + 0.5);
+    var masterBus = buildEffectChain(ctx, getVisualOut(ctx), effects, ctx.currentTime + notes.length * stepTime + 0.5);
 
     function doSchedule(){
       activeNodes = []; // 前のループの音はもう鳴り終わっているはずなので、参照だけ整理
@@ -3604,6 +3635,55 @@
       b.textContent = isPlaying ? '⏸' : '▶';
       if(card) card.classList.toggle('playing', isPlaying);
     });
+    updateVisualizer();
+  }
+
+  // ---------- 📊 再生中カードのリアルタイム・ビジュアライザー ----------
+  // 飾りのアニメーションではなく、実際に鳴っている音の周波数データ（AnalyserNode）を描画します
+  var visualizerRaf = null;
+  var visualizerCanvas = null;
+  function stopVisualizer(){
+    if(visualizerRaf){ cancelAnimationFrame(visualizerRaf); visualizerRaf = null; }
+    if(visualizerCanvas && visualizerCanvas.parentNode){ visualizerCanvas.parentNode.removeChild(visualizerCanvas); }
+    visualizerCanvas = null;
+  }
+  function updateVisualizer(){
+    stopVisualizer();
+    if(!currentMelodyId || !visualAnalyser) return;
+    var card = document.querySelector('.track-card[data-track="' + currentMelodyId + '"]');
+    var cover = card ? card.querySelector('.cover') : null;
+    if(!cover) return;
+
+    var canvas = document.createElement('canvas');
+    canvas.className = 'live-visualizer';
+    cover.appendChild(canvas);
+    visualizerCanvas = canvas;
+    var gctx = canvas.getContext('2d');
+    var data = new Uint8Array(visualAnalyser.frequencyBinCount);
+
+    function draw(){
+      if(visualizerCanvas !== canvas){ return; }
+      var w = cover.clientWidth, h = cover.clientHeight;
+      if(canvas.width !== w) canvas.width = w;
+      if(canvas.height !== h) canvas.height = h;
+      visualAnalyser.getByteFrequencyData(data);
+      gctx.clearRect(0, 0, w, h);
+      var barCount = Math.min(24, data.length);
+      var gap = 3;
+      var barW = (w - gap * (barCount + 1)) / barCount;
+      for(var i = 0; i < barCount; i++){
+        var v = data[i] / 255;
+        var barH = Math.max(2, v * h * 0.85);
+        var x = gap + i * (barW + gap);
+        var grad = gctx.createLinearGradient(0, h, 0, h - barH);
+        grad.addColorStop(0, 'rgba(61,255,160,0.9)');
+        grad.addColorStop(1, 'rgba(255,61,127,0.75)');
+        gctx.fillStyle = grad;
+        gctx.fillRect(x, h - barH, barW, barH);
+      }
+      visualizerRaf = requestAnimationFrame(draw);
+    }
+    visualizerRaf = requestAnimationFrame(draw);
   }
 
   // ---------- WAVファイルとして書き出し・ダウンロード ----------
@@ -5022,6 +5102,40 @@
     }
     composerSequence.push({ freq: shiftedFreq, label: displayLabel });
     renderNoteSeq();
+    playTapPreview(shiftedFreq);
+  }
+
+  // タップした瞬間に、今選んでいる音色でその音を短く鳴らします（置いた音がすぐ確認できて楽しい）
+  function playTapPreview(freq){
+    if(!freq || (Array.isArray(freq) && freq.length === 0)) return;
+    if(currentMelodyId) return; // 曲を再生中は邪魔しない
+    try {
+      var ctx = ensureMelodyCtx();
+      var freqs = Array.isArray(freq) ? freq : [freq];
+      var levelScale = 1 / Math.sqrt(freqs.length);
+      var now = ctx.currentTime + 0.01;
+      var tapDur = 0.35;
+      if(isVocalWaveform(currentWaveform)){
+        scheduleVocalPhrase(ctx, ctx.destination, currentWaveform, [freqs[0]], tapDur, now, 1, 0.8, null);
+        return;
+      }
+      freqs.forEach(function(f, fi){
+        var t = now + fi * 0.014;
+        if(isSampleWaveform(currentWaveform)){
+          loadSampleBuffer(ctx, currentWaveform).then(function(){
+            playSampleNote(ctx, ctx.destination, currentWaveform, f, ctx.currentTime + 0.01, levelScale * 0.8);
+          }).catch(function(){});
+          return;
+        }
+        var o = ctx.createOscillator(); o.type = currentWaveform || 'sine'; o.frequency.value = f;
+        var g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.4 * levelScale, t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + tapDur);
+        o.connect(g).connect(ctx.destination);
+        o.start(t); o.stop(t + tapDur + 0.02);
+      });
+    } catch(e) { /* 音が出せない環境でも入力は続けられるように */ }
   }
 
   document.querySelectorAll('.note-btn').forEach(function(btn){
@@ -5230,6 +5344,25 @@
       var freq = rawFreq === 0 ? 0 : rawFreq * Math.pow(2, bassOctaveShift);
       bassSequence.push({ freq: freq, label: btn.textContent });
       renderBassSeq();
+      if(freq > 0 && !currentMelodyId){
+        try {
+          var ctx = ensureMelodyCtx();
+          var t = ctx.currentTime + 0.01;
+          if(isSampleWaveform(bassWaveform)){
+            loadSampleBuffer(ctx, bassWaveform).then(function(){
+              playSampleNote(ctx, ctx.destination, bassWaveform, freq, ctx.currentTime + 0.01, 0.7);
+            }).catch(function(){});
+          } else {
+            var o = ctx.createOscillator(); o.type = bassWaveform || 'sine'; o.frequency.value = freq;
+            var g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.4, t + 0.015);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+            o.connect(g).connect(ctx.destination);
+            o.start(t); o.stop(t + 0.37);
+          }
+        } catch(e) {}
+      }
     });
   });
   document.getElementById('bassUndoBtn').addEventListener('click', function(){
@@ -5772,12 +5905,40 @@
     document.getElementById('mixerResetBtn').click();
   }
 
+  // ---------- ▶ プレビュー再生中、いま鳴っている音符チップを光らせて追いかける ----------
+  var noteFollowTimer = null;
+  function stopNoteFollow(){
+    if(noteFollowTimer){ clearInterval(noteFollowTimer); noteFollowTimer = null; }
+    noteSeqEl.querySelectorAll('.note-chip.now-playing').forEach(function(c){ c.classList.remove('now-playing'); });
+  }
+  function startNoteFollow(stepTime, totalNotes){
+    stopNoteFollow();
+    if(totalNotes === 0) return;
+    var startedAt = Date.now();
+    noteFollowTimer = setInterval(function(){
+      if(currentMelodyId !== '__preview__'){ stopNoteFollow(); return; }
+      var elapsed = (Date.now() - startedAt) / 1000;
+      var index = Math.floor(elapsed / stepTime) % totalNotes;
+      var chips = noteSeqEl.querySelectorAll('.note-chip');
+      chips.forEach(function(c, i){ c.classList.toggle('now-playing', i === index); });
+      // 見えない位置なら自動でスクロールして追いかける
+      var active = chips[index];
+      if(active && active.scrollIntoView){ active.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+    }, Math.max(60, stepTime * 250));
+  }
+
   document.getElementById('previewNoteBtn').addEventListener('click', function(){
     var lanes = buildComposerLanes();
     if(!lanes.some(function(l){ return l.notes && l.notes.length; })) return;
     var duration = parseInt(document.getElementById('composerDuration').value, 10);
     var stepTime = parseFloat(document.getElementById('composerTempo').value);
+    var wasPlaying = (currentMelodyId === '__preview__');
     playTrack('__preview__', { lanes: lanes, durationSeconds: duration, stepTime: stepTime, effects: buildComposerEffects() }, false);
+    if(!wasPlaying && currentMelodyId === '__preview__'){
+      startNoteFollow(stepTime, composerSequence.length);
+    } else {
+      stopNoteFollow();
+    }
   });
 
   document.getElementById('downloadDraftBtn').addEventListener('click', function(){
