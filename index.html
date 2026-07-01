@@ -5422,10 +5422,10 @@
   var autoMood = 'chill';
   // それぞれの雰囲気で「合いそうな候補」を複数用意し、押すたびにランダムに選ぶことで毎回違う仕上がりにします
   var MOOD_PRESETS = {
-    chill:     { templateIds: ['jazzy', 'sad'],          waveforms: ['triangle', 'sine'],          tempos: ['0.32', '0.45'], density: 0.5 },
-    pop:       { templateIds: ['circle', 'canon'],       waveforms: ['square', 'triangle'],        tempos: ['0.2', '0.32'],  density: 0.65 },
-    sad:       { templateIds: ['sad', 'jazzy'],          waveforms: ['sine', 'triangle'],          tempos: ['0.45', '0.32'], density: 0.4 },
-    energetic: { templateIds: ['komuro', 'circle'],      waveforms: ['sawtooth', 'square'],        tempos: ['0.12', '0.2'],  density: 0.75 }
+    chill:     { templateIds: ['jazzy', 'sad'],          waveforms: ['triangle', 'sine', 'piano', 'violin'],        tempos: ['0.32', '0.45'], density: 0.5 },
+    pop:       { templateIds: ['circle', 'canon'],       waveforms: ['square', 'triangle', 'piano', 'acoustic'],    tempos: ['0.2', '0.32'],  density: 0.65 },
+    sad:       { templateIds: ['sad', 'jazzy'],          waveforms: ['sine', 'triangle', 'violin', 'piano'],        tempos: ['0.45', '0.32'], density: 0.4 },
+    energetic: { templateIds: ['komuro', 'circle'],      waveforms: ['sawtooth', 'square', 'trumpet', 'acoustic'],  tempos: ['0.12', '0.2'],  density: 0.75 }
   };
   function pickRandom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -5523,18 +5523,20 @@
   // 直前と全く同じ「テンプレ・転調・テンポ・音色・ドラム」を連続で引いてしまうと
   // 曲が変わったように聞こえないため、前回と完全一致した場合は必ず引き直します
   var lastAutoComboKey = null;
+  var BASS_WAVEFORM_POOL = ['sine', 'triangle', 'square', 'acoustic', 'piano'];
   function rollAutoComposeParams(preset){
     var combo;
     for(var attempt = 0; attempt < 12; attempt++){
       var templateId = pickRandom(preset.templateIds);
       var waveform = pickRandom(preset.waveforms);
+      var bassWave = pickRandom(BASS_WAVEFORM_POOL);
       var tempo = pickRandom(preset.tempos);
       var transposeSemitones = pickRandom([-5, -3, -2, 0, 2, 3, 5]);
       var structureId = pickRandom(SONG_STRUCTURES.map(function(s){ return s.id; }));
       var verseVariant = pickRandom([0, 2]);
       var chorusVariant = pickRandom([1, 2]);
-      var key = [templateId, waveform, tempo, transposeSemitones, structureId, verseVariant, chorusVariant].join('|');
-      combo = { templateId: templateId, waveform: waveform, tempo: tempo, transposeSemitones: transposeSemitones, structureId: structureId, verseVariant: verseVariant, chorusVariant: chorusVariant, key: key };
+      var key = [templateId, waveform, bassWave, tempo, transposeSemitones, structureId, verseVariant, chorusVariant].join('|');
+      combo = { templateId: templateId, waveform: waveform, bassWave: bassWave, tempo: tempo, transposeSemitones: transposeSemitones, structureId: structureId, verseVariant: verseVariant, chorusVariant: chorusVariant, key: key };
       if(key !== lastAutoComboKey) break;
     }
     lastAutoComboKey = combo.key;
@@ -5551,6 +5553,10 @@
     currentWaveform = params.waveform;
     document.querySelectorAll('#wavePicker .wave-btn').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-wave') === params.waveform);
+    });
+    bassWaveform = params.bassWave;
+    document.querySelectorAll('#bassWavePicker .wave-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-wave') === params.bassWave);
     });
     selectedChordTemplateId = tpl.id;
 
