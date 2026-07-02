@@ -3768,20 +3768,20 @@
       b.textContent = isPlaying ? '⏸' : '▶';
       if(card) card.classList.toggle('playing', isPlaying);
     });
-    updateVisualizer();
+    updateCardVisualizer();
   }
 
   // ---------- 📊 再生中カードのリアルタイム・ビジュアライザー ----------
   // 飾りのアニメーションではなく、実際に鳴っている音の周波数データ（AnalyserNode）を描画します
   var visualizerRaf = null;
   var visualizerCanvas = null;
-  function stopVisualizer(){
+  function stopCardVisualizer(){
     if(visualizerRaf){ cancelAnimationFrame(visualizerRaf); visualizerRaf = null; }
     if(visualizerCanvas && visualizerCanvas.parentNode){ visualizerCanvas.parentNode.removeChild(visualizerCanvas); }
     visualizerCanvas = null;
   }
-  function updateVisualizer(){
-    stopVisualizer();
+  function updateCardVisualizer(){
+    stopCardVisualizer();
     if(!currentMelodyId || !visualAnalyser) return;
     var card = document.querySelector('.track-card[data-track="' + currentMelodyId + '"]');
     var cover = card ? card.querySelector('.cover') : null;
